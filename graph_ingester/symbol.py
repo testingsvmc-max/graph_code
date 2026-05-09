@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
-"""
-This module processes an in-memory collection of clangd symbols to create
-the file, folder, and symbol nodes in a Neo4j graph.
-"""
+"""Processes clangd symbols for Neo4j ingestion (Neo4j imported only when ingesting)."""
+from __future__ import annotations
+
 import os
 import sys
 import argparse
 import math
 from pathlib import Path
 from urllib.parse import urlparse, unquote
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Any, Tuple, Optional, TYPE_CHECKING
 from collections import defaultdict
 import logging
 import gc
@@ -18,8 +17,10 @@ from tqdm import tqdm
 import input_params
 from symbol_parser import SymbolParser, Symbol
 from source_parser import CompilationManager
-from neo4j_manager import Neo4jManager
 from utils import align_string
+
+if TYPE_CHECKING:
+    from neo4j_manager import Neo4jManager
 from .path import PathProcessor, PathManager
 
 logger = logging.getLogger(__name__)
@@ -609,6 +610,8 @@ def main():
     logger.info("--- Finished Phase 2 ---")
     
     path_manager = PathManager(args.project_path)
+    from neo4j_manager import Neo4jManager
+
     with Neo4jManager() as neo4j_mgr:
         if not neo4j_mgr.check_connection(): return 1
         neo4j_mgr.setup_database(path_manager.project_path, {})

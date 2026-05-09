@@ -4,3 +4,7 @@ Thumbs.db
 *.backup
 *.log
 */.adk/
+
+__pycache__/
+*.py[cod]
+.pytest_cache/

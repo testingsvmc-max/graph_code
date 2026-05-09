@@ -1,20 +1,27 @@
 #!/usr/bin/env python3
-"""
-This module processes an in-memory collection of clangd symbols to extract and 
-create the file, folder, and symbol nodes in a Neo4j graph.
-"""
+"""File/folder discovery and Neo4j ingestion for the code graph."""
+from __future__ import annotations
+
 import os
 from pathlib import Path
 from urllib.parse import urlparse, unquote
-from typing import List, Dict
+from typing import List, Dict, TYPE_CHECKING
 import logging
 import gc
-from tqdm import tqdm
 
-from neo4j_manager import Neo4jManager
+try:
+    from tqdm import tqdm
+except ImportError:  # pragma: no cover
+
+    def tqdm(iterable, **_kwargs):
+        return iterable
+
 from utils import align_string
 from symbol_parser import Symbol
 from source_parser import CompilationManager
+
+if TYPE_CHECKING:
+    from neo4j_manager import Neo4jManager
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)

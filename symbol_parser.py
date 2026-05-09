@@ -14,7 +14,13 @@ import logging, os
 import gc
 from concurrent.futures import ProcessPoolExecutor, wait, FIRST_COMPLETED
 from multiprocessing import get_context
-from tqdm import tqdm
+
+try:
+    from tqdm import tqdm
+except ImportError:  # pragma: no cover
+
+    def tqdm(iterable, **_kwargs):
+        return iterable
 
 from memory_debugger import Debugger
 from utils import align_string, safe_pickle_load # Import Debugger
