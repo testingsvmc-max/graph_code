@@ -23,6 +23,28 @@ from .types import SourceSpan, MacroSpan, TypeAliasSpan, IncludeRelation
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+
+def _configure_libclang_from_env() -> None:
+    """Allow Windows/local setups to point python-clang to libclang explicitly."""
+    lib_file = os.getenv("LIBCLANG_LIBRARY_FILE")
+    if lib_file and os.path.isfile(lib_file):
+        try:
+            clang.cindex.Config.set_library_file(lib_file)
+            logger.info("Using libclang from LIBCLANG_LIBRARY_FILE=%s", lib_file)
+            return
+        except Exception as exc:
+            logger.warning("Failed to set libclang library file '%s': %s", lib_file, exc)
+    lib_path = os.getenv("LIBCLANG_PATH")
+    if lib_path and os.path.isdir(lib_path):
+        try:
+            clang.cindex.Config.set_library_path(lib_path)
+            logger.info("Using libclang from LIBCLANG_PATH=%s", lib_path)
+        except Exception as exc:
+            logger.warning("Failed to set libclang library path '%s': %s", lib_path, exc)
+
+
+_configure_libclang_from_env()
+
 class CompilationManager:
     """Manages parsing, caching, and parallel execution logic."""
 

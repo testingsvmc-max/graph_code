@@ -85,7 +85,8 @@ def main() -> int:
             cc = str(cand)
         else:
             logger.error(
-                "No compile_commands.json found under project path and --compile-commands not set.\n"
+                "No compile_commands.json found under project path, and neither --compile-commands "
+                "nor COMPILE_COMMANDS_PATH env var was set.\n"
                 "Generate one for the tree you want to parse (e.g. Bear, CMake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON, "
                 "or a Soong/NDK workflow that emits a compilation database), then re-run."
             )

@@ -74,6 +74,7 @@ def collect_filesystem_graph(
     """PROJECT / FOLDER / FILE nodes and CONTAINS edges."""
     nodes: List[Dict[str, Any]] = []
     edges: List[Dict[str, Any]] = []
+    node_label_by_id: Dict[str, str] = {n["id"]: (n.get("labels") or [""])[0] for n in nodes}
     root = os.path.abspath(project_path)
     proj_id = "__PROJECT__"
     nodes.append({"id": proj_id, "labels": ["PROJECT"], "properties": {"root": root}})
@@ -124,14 +125,78 @@ def collect_symbol_nodes_and_edges(
     qualified = processor._build_scope_maps(symbol_parser.symbols)
     processed = _dedup_processed_symbols(processor._process_and_group_symbols(symbol_parser.symbols, qualified))
 
+    root = os.path.abspath(path_manager.project_path)
+
+    def _rel_from_uri(file_uri: str | None) -> str | None:
+        if not file_uri:
+            return None
+        parsed = urlparse(file_uri)
+        if parsed.scheme == "file":
+            raw_path = unquote(parsed.path or "")
+            netloc = unquote(parsed.netloc or "")
+            p = raw_path or netloc
+            if not p and netloc:
+                p = netloc
+        else:
+            p = file_uri
+        p = p.replace("\\", "/")
+        if os.name == "nt":
+            if len(p) >= 3 and p[0] == "/" and p[2] == ":":
+                p = p[1:]
+            while len(p) >= 4 and p[0] == "/" and p[1].isalpha() and p[2] == ":" and p[3] == "/":
+                p = p[1:]
+        ap = os.path.abspath(p)
+        try:
+            rel = os.path.relpath(ap, root)
+            rel = rel.replace("\\", "/")
+            if rel.startswith("../") or rel == "..":
+                return None
+            return rel
+        except ValueError:
+            return None
+
+    symbol_relpaths: Dict[str, str] = {}
+    for sid, sym in symbol_parser.symbols.items():
+        loc = sym.definition or sym.declaration
+        rel_fp = _rel_from_uri(loc.file_uri) if loc else None
+        if rel_fp:
+            symbol_relpaths[sid] = rel_fp
+
     nodes: List[Dict[str, Any]] = []
     for label, items in processed.items():
         for data in items:
             nid = data["id"]
             props = _symbol_node_properties(data)
             props["kind"] = data.get("kind")
+            if not props.get("file_path") and not props.get("path"):
+                rel_fp = symbol_relpaths.get(nid)
+                if rel_fp:
+                    props["file_path"] = rel_fp
             nodes.append({"id": nid, "labels": [label], "properties": props})
 
+    # Fallback: if processor pipeline yields no symbol nodes (e.g. path mapping edge
+    # cases on Windows), still materialize symbol nodes directly from parsed symbols.
+    if not nodes:
+        for sym in symbol_parser.symbols.values():
+            label = Symbol.get_node_label(sym)
+            if not label:
+                continue
+            loc = sym.definition or sym.declaration
+            rel_fp = None
+            if loc and loc.file_uri:
+                rel_fp = _rel_from_uri(loc.file_uri)
+            props = {
+                "name": sym.name,
+                "kind": sym.kind,
+                "language": sym.language or None,
+                "signature": sym.signature or None,
+                "return_type": sym.return_type or None,
+            }
+            if rel_fp:
+                props["file_path"] = rel_fp
+            nodes.append({"id": sym.id, "labels": [label], "properties": {k: v for k, v in props.items() if v is not None}})
+
+    node_label_by_id: Dict[str, str] = {n["id"]: (n.get("labels") or [""])[0] for n in nodes}
     edges: List[Dict[str, Any]] = []
 
     id_to_label: Dict[str, str] = {}
@@ -189,11 +254,24 @@ def collect_symbol_nodes_and_edges(
 
     for label in ("FUNCTION", "VARIABLE", "DATA_STRUCTURE", "CLASS_STRUCTURE", "TYPE_ALIAS", "MACRO"):
         for symbol_data in processed.get(label, []):
-            fp = symbol_data.get("file_path")
+            fp = symbol_data.get("file_path") or symbol_relpaths.get(symbol_data["id"])
             if fp:
                 edges.append(
                     {"type": "DEFINES", "src": f"file:{fp}", "dst": symbol_data["id"], "properties": {"symbol_label": label}}
                 )
+
+    # Ensure symbol-to-file ownership edges exist even when the processed symbol
+    # payload lacks file_path/path on some platforms.
+    defines_labels = {"FUNCTION", "VARIABLE", "DATA_STRUCTURE", "CLASS_STRUCTURE", "TYPE_ALIAS", "MACRO", "METHOD", "FIELD"}
+    existing_defines = {(e["src"], e["dst"]) for e in edges if e.get("type") == "DEFINES"}
+    for sid, fp in symbol_relpaths.items():
+        label = node_label_by_id.get(sid, "")
+        if label not in defines_labels:
+            continue
+        key = (f"file:{fp}", sid)
+        if key in existing_defines:
+            continue
+        edges.append({"type": "DEFINES", "src": key[0], "dst": key[1], "properties": {"symbol_label": label}})
 
     for label in ("FUNCTION", "VARIABLE", "DATA_STRUCTURE", "CLASS_STRUCTURE"):
         for symbol_data in processed.get(label, []):

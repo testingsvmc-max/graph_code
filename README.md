@@ -18,6 +18,157 @@ The project includes an example MCP server and an AI expert agent. You can also 
 *   **Feature Implementation**: Guide on implementing features based on requirements
 *   **Architecture Review**: Analyze and suggest improvements to system architecture
 
+## Quick Start (No Neo4j)
+
+If you only need query/search and call graph exploration, you can run a full flow with **clangd-graph-rag only** (no Neo4j, no extra graph-review apps).
+
+For VSCode + Cline users: after opening this repo, you can ask Cline:
+
+```text
+setup clangd graph
+```
+
+Or to build graph directly for current project/code directory:
+
+```text
+Build graph code for this project or code directory
+```
+
+Or to query callers/callees and traverse call graph:
+
+```text
+search callers/callees and graph traversal
+```
+
+Cline can use project skills under `.cline/skills/` and run:
+
+```bash
+python standalone_tools/setup_clangd_graph.py
+```
+
+For **deterministic graph quality metrics** (node/edge counts, cross-file `CALLS`, function `file_path` coverage), see [eval/README.md](eval/README.md) and run `python eval/run_graph_eval.py --help`.
+
+### Export graph tools — MCP-style `*_tool` API (HTTP + MCP + CLI)
+
+On a **YAML/JSON export** (no Neo4j), use stable ``*_tool`` names (where the data exists in this graph):
+
+| HTTP | `GET /tools/catalog` — list tools; `POST /tools/invoke` — body `{"tool":"list_graph_stats_tool","arguments":{}}` |
+| CLI | `python standalone_tools/code_graph_tools.py <code_graph.yaml> catalog` and `... invoke <tool_name> --args '{...}'` |
+| MCP | `python code_graph_mcp_tools_server.py <graph.yaml>` — tools `invoke_graph_tool`, `list_graph_tools` (set `GRAPH_PATH` or pass path as argv); default port **8810** |
+
+Implemented tools include `list_graph_stats_tool`, `query_graph_tool`, `traverse_graph_tool`, `get_impact_radius_tool`, `semantic_search_nodes_tool`, `get_minimal_context_tool`, `get_review_context_tool`, `find_large_functions_tool`, `get_hub_nodes_tool`, `get_bridge_nodes_tool`, `detect_changes_tool`, `get_knowledge_gaps_tool`, `get_surprising_connections_tool`, `get_suggested_questions_tool`. Flows, communities, wiki, refactor, multi-repo, and embed-on-export return `status: unsupported` with a short reason.
+
+`setup_clangd_graph.py` now also checks `clangd-indexer` and tries to install it:
+- Windows: via `winget` (`LLVM.clangd`, fallback `LLVM.LLVM`)
+- Linux (Debian/Ubuntu): via `apt-get install clangd clang-tools`
+
+If you prefer manual handling, use:
+
+```bash
+python standalone_tools/setup_clangd_graph.py --skip-clangd-indexer
+```
+
+For direct build, Cline can run:
+
+```bash
+python standalone_tools/build_graph_code.py --also-db
+```
+
+For query/traversal, Cline can run API flow from:
+
+```bash
+python -m code_graph_api <graph.yaml> --host 127.0.0.1 --port 8090
+```
+
+During setup, the script asks for confirmation whether you want to provide a
+`compile_commands.json` path now. If yes, it stores the value into
+`.env.clangd_graph` as `COMPILE_COMMANDS_PATH`.
+
+1. Install Python dependencies:
+   ```bash
+   # default profile: no Neo4j
+   pip install -r requirements-core.txt
+
+   # optional Neo4j extras
+   # pip install -r requirements-core.txt -r requirements-neo4j.txt
+   ```
+2. Prepare compilation inputs for your target C/C++ repo:
+   ```bash
+   # compile_commands.json (example with CMake)
+   cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON <your-original-cmake-options>
+
+   # clangd index YAML
+   clangd-indexer --executor=all-TUs --format=yaml <path/to/compile_commands.json> > clangd-index.yaml
+   ```
+   If `clangd-indexer` is missing, run setup first (recommended), or install manually:
+   - Windows: `winget install -e --id LLVM.clangd` (or `LLVM.LLVM`)
+   - Linux (Debian/Ubuntu): `sudo apt-get install -y clangd clang-tools`
+   Optional (recommended): set once so you do not repeat `--compile-commands` on every command:
+   ```bash
+   # Linux/macOS
+   export COMPILE_COMMANDS_PATH=<path/to/compile_commands.json>
+
+   # PowerShell
+   $env:COMPILE_COMMANDS_PATH="<path/to/compile_commands.json>"
+   ```
+3. Export graph to JSON/YAML using this repo:
+   ```bash
+   python standalone_tools/export_code_graph_json.py <path/to/clangd-index.yaml> <path/to/project> \
+     -o <path/to/code_graph.yaml>
+   ```
+   If `COMPILE_COMMANDS_PATH` is not set, pass `--compile-commands <path/to/compile_commands.json>`.
+4. Query/search via HTTP API (no Neo4j):
+   ```bash
+   python -m code_graph_api <path/to/code_graph.yaml> --host 127.0.0.1 --port 8090
+   ```
+   Then use:
+   - `GET /functions/search?q=...`
+   - `GET /functions/{func_id}/callers`
+   - `GET /functions/{func_id}/callees`
+   - `GET /functions/{func_id}/call-graph?direction=both&depth=2`
+
+5. Optional visualize:
+   ```bash
+   python standalone_tools/export_code_graph_html.py <path/to/code_graph.yaml> -o graph_vis.html --edge-types CALLS,INCLUDES
+   ```
+
+6. Optional local CLI query tools (no MCP):
+   ```bash
+   python standalone_tools/query_code_graph.py <path/to/code_graph.yaml> stats
+   python standalone_tools/query_code_graph.py <path/to/code_graph.yaml> search "auth"
+   python standalone_tools/query_code_graph.py <path/to/code_graph.yaml> query callers_of "<func_id>"
+   python standalone_tools/query_code_graph.py <path/to/code_graph.yaml> traverse "<func_id>" --direction both --depth 2
+   python standalone_tools/query_code_graph.py <path/to/code_graph.yaml> impact-radius src/a.c include/a.h
+   ```
+
+7. Build both YAML + SQLite DB in one command (recommended personal setup):
+   ```bash
+   python standalone_tools/build_graph_code.py <path/to/project> \
+     --index-file <path/to/clangd-index.yaml> \
+     --compile-commands <path/to/compile_commands.json> \
+     --also-db
+   ```
+   Outputs:
+   - `<path/to/project>/.clangd-graph-rag/code_graph.yaml`
+   - `<path/to/project>/.clangd-graph-rag/graph.db`
+
+8. Optional standalone SQLite `graph.db` export (if you already have YAML/JSON flow separate):
+   ```bash
+   python standalone_tools/export_code_graph_db.py <path/to/clangd-index.yaml> <path/to/project> \
+     --compile-commands <path/to/compile_commands.json> \
+     --db <path/to/project>/.clangd-graph-rag/graph.db
+
+   python standalone_tools/crg_db_query.py --db <path/to/project>/.clangd-graph-rag/graph.db search "auth"
+   python standalone_tools/crg_db_query.py --db <path/to/project>/.clangd-graph-rag/graph.db callers "<qualified_name>"
+   ```
+
+API extras (still no MCP):
+- `GET /graph/stats`
+- `GET /nodes/search?q=...`
+- `GET /graph/query?pattern=callers_of&target=<id>`
+- `GET /graph/traverse?start=<id>&direction=both&edge_type=CALLS&depth=2`
+- `POST /graph/impact-radius` with body: `{"changed_files":["src/a.c","include/a.h"]}`
+
 ---
 
 ### Current Schema
@@ -31,10 +182,12 @@ Here is a simplified version of the [current neo4j schema](neo4j_simplified_sche
 When building a code graph for the Linux kernel (WSL2 release) on a workstation (12 cores, 64GB RAM), it takes about ~4 hours using 10 parallel worker processes, with peak memory usage at ~32GB. Note this process does not include the LLM summary generation, so the total time (and cost) may vary based on your LLM provider. Local LLM API with Ollama is supported.
 
 ## Table of Contents
+- [Quick Start (No Neo4j)](#quick-start-no-neo4j)
 - [Why This Project?](#why-this-project)
 - [Why Clang instead of Tree-sitter?](#why-clang-instead-of-tree-sitter)
 - [Key Features & Design Principles](#key-features--design-principles)
 - [Prerequisites](#prerequisites)
+- [End-to-end: build the graph from scratch](#end-to-end-build-the-graph-from-scratch)
 - [Primary Usage](#primary-usage)
   - [Full Graph Build](#full-graph-build)
   - [Incremental Graph Update](#incremental-graph-update)
@@ -91,7 +244,7 @@ To successfully build the graph, this project leverages the power of the LLVM ec
      ```
    For other build system like Bazel, please refer to [LLVM original document](https://clang.llvm.org/docs/JSONCompilationDatabase.html) for more details.
 
-   By default, the system looks for the `compile_commands.json` files in the root of your project path. If they are located  or with a different name, you can point to them using the `--compile-commands` option. For more details on customizing paths, see the [Common Options](#common-options) section.
+   By default, the system looks for the `compile_commands.json` file in the project root. If it is elsewhere, use `--compile-commands` or set `COMPILE_COMMANDS_PATH` once in your environment. For more details on customizing paths, see the [Common Options](#common-options) section.
 
 2. **Clangd Index File (.yaml)**
 
@@ -110,9 +263,12 @@ To successfully build the graph, this project leverages the power of the LLVM ec
  
    The project requires a clang installed on your system (that has libclang included). Your system usually has it by default. If not, you can download it from the official [clang website](https://clang.llvm.org/)， version >= 21.0.0. (The project originally targeted clang version >= 16.x, but versions below 21.0.0 are not actively maintained.)
 
-2. **Neo4j**
+2. **Neo4j (optional if you only use SQLite `graph.db` query/API)**
 
-   The project requires a Neo4j database running to store the graph data. Check if your system supports neo4j in its package management (like apt). Or you can download its Desktop version (encouraged) or service version (the Community version works fine) from the official [Neo4j website](https://neo4j.com/download/), version >= 5.0.0. (I used to work with version 4.x. Not sure if it still works.) 
+   The project requires a Neo4j database running to store the graph data **for the Neo4j pipeline**.  
+   If you only use **clangd-graph-rag** SQLite ``graph.db`` (for example ``<project>/.clangd-graph-rag/graph.db``) with `standalone_tools/crg_db_query.py` or `code_graph_api/crg_db_main.py`, you can skip this dependency.
+   
+   Check if your system supports neo4j in its package management (like apt). Or you can download its Desktop version (encouraged) or service version (the Community version works fine) from the official [Neo4j website](https://neo4j.com/download/), version >= 5.0.0. (I used to work with version 4.x. Not sure if it still works.) 
 
    The project also needs the neo4j's APOC plugin (core + extension), which can be easily installed from the Desktop version. That's why the Desktop version is suggested. If you use neo4j service version, you need download [APOC core](https://github.com/neo4j/apoc/releases) and [APOC extension](https://github.com/neo4j-contrib/neo4j-apoc-procedures/releases), and put them to your neo4j's plugins folder (mine is at /var/lib/neo4j/plugins) then restart neo4j service. Note the downloaded APOC version should match with your neo4j version. 
    
@@ -123,6 +279,8 @@ To successfully build the graph, this project leverages the power of the LLVM ec
     NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "neo4j")
     ```
 
+   > Quick skip note: during setup, if you are not using Neo4j now, comment this block in your local checklist and continue with the SQLite-only section [7b. Query `graph.db` directly (no Neo4j)](#7b-query-graphdb-directly-no-neo4j).
+
 3. **LLM model and its API key**
 
    If you want to generate summaries in the neo4j graph with LLM, you need have access to an LLM model service either remotely or locally. The project uses Litellm package to access LLM APIs, which can virtually support almost all popular LLM services. You need set environment variable for the API key for your remote LLM service, such as OPENAI_API_KEY, or DEEPSEEK_API_KEY, etc. If you want to use your specific model, you can simply add it in file `llm_client.py`, by modifying the constructor `__init__()` of the `LiteLlmClient` class. The code retrieves the max context window size from the service by default. You can also specify a window size by modifying the code there.
@@ -132,9 +290,134 @@ To successfully build the graph, this project leverages the power of the LLVM ec
    The project requires `Python 3.13` (or higher). 
    Actually `Python 3.11 (or higher)` is enough, if you only want to build the graphRAG and don't plan to run the example AI agent. The example agent is developed using Google ADK that requires `Python 3.13`. Then you can remove the `google-adk` dependency from the provided `requirements.txt`, and maintain your own requirements file.
 
+## End-to-end: build the graph from scratch
+
+This section is a single ordered checklist: from an empty machine to a populated **Neo4j** graph (the graph database used by this repo), optional HTML visualizations, and how clients connect to Neo4j.
+
+### 1. Clone and install Python dependencies
+
+```bash
+git clone https://github.com/2015xli/clangd-graph-rag.git
+cd clangd-graph-rag
+   pip install -r requirements-core.txt
+```
+
+If you will not run the Google ADK example agent, you may remove the `google-adk` line from `requirements.txt` first (see [Prerequisites](#prerequisites)).
+
+### 2. Start Neo4j and configure connection (“call into” the graph DB)
+
+The builder and updater talk to Neo4j over the Bolt protocol.
+
+1. Install and start **Neo4j** (Desktop or server, Community is fine), **version ≥ 5**, with the **APOC** plugin (core + extended) enabled, as described in [Prerequisites](#prerequisites).
+2. Set environment variables if you are not using the defaults (`neo4j` / `neo4j`):
+
+   ```bash
+   export NEO4J_URI="bolt://localhost:7687"
+   export NEO4J_USER="neo4j"
+   export NEO4J_PASSWORD="<your-password>"
+   ```
+
+   Defaults are defined in `neo4j_manager/base.py` and match a typical local install.
+
+3. Confirm the database is reachable from Neo4j Browser (usually `http://localhost:7474`) or with a trivial Cypher `RETURN 1`. The MCP server and `Neo4jManager` use the same URI and credentials.
+
+### 3. Produce `compile_commands.json`
+
+Your C/C++ tree must have a [JSON compilation database](https://clang.llvm.org/docs/JSONCompilationDatabase.html) at the project root (or pass `--compile-commands` later). Typical examples:
+
+```bash
+# CMake
+cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON <options> <source-dir>
+
+# Make (with Bear)
+bear -- make <your-target>
+```
+
+### 4. Build the clangd static index (YAML)
+
+Install **clangd-indexer** (LLVM / clangd releases, version aligned with your toolchain), then from the directory that contains `compile_commands.json`:
+
+```bash
+clangd-indexer --executor=all-TUs --format=yaml . > clangd-index.yaml
+```
+
+You will pass the path to `clangd-index.yaml` as the first argument to `graph_builder.py`.
+
+### 5. Ingest the graph into Neo4j
+
+With Neo4j running and env vars set, run the main orchestrator (structural graph only first is recommended):
+
+```bash
+# Structural graph only (no LLM cost)
+python3 graph_builder.py /absolute/path/to/clangd-index.yaml /absolute/path/to/your/project/
+
+# Same, but also generate summaries (see --llm-api)
+python3 graph_builder.py /absolute/path/to/clangd-index.yaml /absolute/path/to/your/project/ --generate-summary --llm-api fake
+```
+
+This populates Neo4j with project, file, symbol, call, include, and related nodes and relationships. Details: [Graph Builder](./docs/graph_builder.md).
+
+Optional later step — summaries only on an existing graph:
+
+```bash
+python3 -m summary_driver /absolute/path/to/clangd-index.yaml /absolute/path/to/your/project/ --llm-api openai
+```
+
+### 6. Verify and query Neo4j
+
+- Open **Neo4j Browser**, connect with the same user/password, and run schema or pattern queries (for example counts by label).
+- From the shell you can introspect the schema:
+
+  ```bash
+  python3 -m neo4j_manager dump-schema
+  ```
+
+- Programmatic access: use `Neo4jManager` as elsewhere in the codebase, or start **`graph_mcp_server.py`** so an agent can run Cypher via MCP ([Example Workflow](#example-workflow)).
+
+### 7. Optional visualizations (not required for Neo4j)
+
+The primary artifact of this repo is the **Neo4j** graph. Separately, this repository ships **SQLite `graph.db` + HTML** helpers that work on exports from **clangd-graph-rag** (same ``nodes``/``edges`` layout many graph-review tools use):
+
+| Goal | What to run |
+|------|----------------|
+| D3 ``graph.html`` with per-function **CALLS** (full mode) | Prefer **clangd-graph-rag** export + ``crg_visualize_full_d3.py``. If you use an external graph-review visualize pipeline, use **full** mode so function-level ``CALLS`` are not aggregated away. |
+| Orange cross-file call edges in D3 | `python standalone_tools/crg_enhance_d3_html.py <path/to/graph.html> -o graph_d3.html` |
+| One-step full D3 + enhancement from `graph.db` | `python standalone_tools/crg_visualize_full_d3.py --db <path/to/graph.db> -o graph_d3.html` |
+| vis-network HTML from `graph.db` | `python standalone_tools/crg_db_to_vis_html.py --db <path/to/graph.db> -o calls.html` (see `--help` for `--inter-file-full` and related flags). |
+
+These paths do **not** replace Neo4j ingestion; they are optional analysis and reporting tools. ``crg_visualize_full_d3.py`` can optionally call an external visualize package if installed; otherwise use post-process + enhance scripts on HTML you already have.
+
+### 7b. Query `graph.db` directly (no Neo4j)
+
+If you only want query/search on **clangd-graph-rag** SQLite ``graph.db`` (for example ``<project>/.clangd-graph-rag/graph.db``), use:
+
+```bash
+# CLI
+python standalone_tools/crg_db_query.py --db <path/to/graph.db> search "wpa_auth" --limit 20
+python standalone_tools/crg_db_query.py --db <path/to/graph.db> callers "src/wpa.c::wpa_init"
+python standalone_tools/crg_db_query.py --db <path/to/graph.db> callees "src/wpa.c::wpa_init"
+python standalone_tools/crg_db_query.py --db <path/to/graph.db> call-graph "src/wpa.c::wpa_init" --direction both --depth 2 --limit 800
+```
+
+```bash
+# HTTP API (FastAPI, still no Neo4j)
+python -m code_graph_api.crg_db_main <path/to/graph.db> --host 127.0.0.1 --port 8091
+```
+
+Main endpoints:
+- `GET /functions/search?q=...&limit=...`
+- `GET /functions/{target}/resolve`
+- `GET /functions/{target}/callers`
+- `GET /functions/{target}/callees`
+- `GET /functions/{target}/call-graph?direction=both&depth=2&limit=800`
+
+### 8. Incremental updates (after the first full build)
+
+Once the graph exists in Neo4j and the project is a Git repository, use `graph_updater.py` with a fresh clangd index YAML instead of rebuilding everything. See [Incremental Graph Update](#incremental-graph-update).
+
 ## Primary Usage
 
-**Note 1**: To build graph, please follow [the prerequisites](#prerequisites) to prepare the clang compilation database file `compile_commands.json` and the clangd index `.yaml` file, and have the neo4j server started. The examples below assume the `compile_commands.json` file is located in the root of your project path. If it is located elsewhere, you must specify its location with the `--compile-commands` option (see [Common Options](#common-options)).  
+**Note 1**: To build graph, please follow [the prerequisites](#prerequisites) to prepare the clang compilation database file `compile_commands.json` and the clangd index `.yaml` file, and have the neo4j server started. The examples below assume the `compile_commands.json` file is located in the root of your project path. If it is located elsewhere, specify it with `--compile-commands` or set `COMPILE_COMMANDS_PATH` (see [Common Options](#common-options)).  
 
 **Note 2**: To generate LLM summaries for the graph, it is highly recommended to create a `project-info.md` file in the project root folder as the project context information, which is extremely useful for the LLM to have a right context. The file content can be a few words or a few paragraphs as you want, such as "This LLVM project is a collection of modular compiler and toolchain technologies."
 
@@ -147,7 +430,7 @@ To successfully build the graph, this project leverages the power of the LLVM ec
    Then you need install the required packages using the following command:
    ```
    #If you don't want to run the example AI agent, you can remove the `google-adk` dependence
-   pip install -r requirements.txt
+   pip install -r requirements-core.txt
    ```
 
 The two main entry points of the project are the graph builder and the graph updater.
@@ -200,7 +483,7 @@ You can always use `--help` option to check all the available options for any sc
 Both the builder, updater and other scripts accept a wide range of common arguments, which are centralized in `input_params.py`. These include:
 
 *   **Compilation Arguments**:
-    *   `--compile-commands`: Path to the `compile_commands.json` file. This file is essential for the new accurate parsing engine. By default, the tool searches for `compile_commands.json` in the project's root directory.
+    *   `--compile-commands`: Path to the `compile_commands.json` file. This file is essential for the new accurate parsing engine. By default, the tool uses `COMPILE_COMMANDS_PATH` if set; otherwise it searches for `compile_commands.json` in the project's root directory.
 *   **RAG Arguments**: Control summary and embedding generation (e.g., `--generate-summary`, `--llm-api`).
 *   **Worker Arguments**: Configure parallelism depends on your system resources
     *   `--num-parse-workers`: Number of parallel parsing worker processes for YAML index file and source file parsing, in case you have a large codebase with lots of files (like Linux kernel). This may need to be tuned based on your system resources. Usually set to a number close to the number of available CPU cores.
@@ -261,8 +544,23 @@ These scripts are the core components of the pipeline and can also be run standa
 
 *   **`python3 -m neo4j_manager`**:
     *   **Purpose**: A command-line utility for database maintenance.
-    *   **Functionality**: Includes tools to `dump-schema` for inspection or `delete-property` to clean up data.
-    *   **Usage**: `python3 -m neo4j_manager dump-schema`
+    *   **Functionality**: Includes tools to inspect schema, clean properties, and query call graph data quickly from terminal.
+    *   **Usage**:
+        ```bash
+        # Schema / maintenance
+        python3 -m neo4j_manager dump-schema
+        python3 -m neo4j_manager delete-property --label FUNCTION --key summary
+
+        # Search (similar to export-graph query / MCP-style search)
+        python3 -m neo4j_manager search "wpa_auth" --labels FUNCTION,METHOD --limit 20
+
+        # Direct call relationships
+        python3 -m neo4j_manager callers "src/wpa.c::wpa_init"
+        python3 -m neo4j_manager callees "src/wpa.c::wpa_init"
+
+        # Local call neighborhood (up/down/both)
+        python3 -m neo4j_manager call-graph "src/wpa.c::wpa_init" --direction both --depth 2 --limit 800
+        ```
 
 *   **`graph_ingester/symbol.py`**:
     *   **Purpose**: Ingests the file/folder structure and symbol definitions, mainly for debugging.

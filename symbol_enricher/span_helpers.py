@@ -1,4 +1,5 @@
 import logging
+import os
 from urllib.parse import urlparse, unquote
 from typing import Optional
 
@@ -12,19 +13,30 @@ class HelpersMixin:
     """Provides utility methods for filtering, geometric checks, and symbol creation."""
     VARIABLE_KIND = {"Field", "StaticProperty", "EnumConstant", "Variable"}
 
+    def _normalize_uri_path(self, file_uri: str) -> str:
+        """
+        Normalize clangd file URI/path to comparable absolute path.
+        Handles Windows URIs like "/D:/repo/file.c".
+        """
+        p = unquote(urlparse(file_uri).path)
+        # Windows file URI may include a leading slash before drive letter.
+        if os.name == "nt" and len(p) >= 3 and p[0] == "/" and p[2] == ":":
+            p = p[1:]
+        return os.path.normcase(os.path.abspath(p)).replace("\\", "/")
+
     def _filter_symbols_by_project_path(self):
         """
         Filters out symbols whose definitions or declarations are outside the project path.
         Namespace symbols are an exception and are always kept.
         """
         logger.info("Filtering symbols to only include those in the project path.")
-        project_path = self.compilation_manager.project_path
+        project_path = os.path.normcase(os.path.abspath(self.compilation_manager.project_path)).replace("\\", "/")
         
         keys_to_remove = []
         for sym_id, sym in self.symbol_parser.symbols.items():
             loc = sym.definition or sym.declaration
             if loc:
-                sym_abs_path = unquote(urlparse(loc.file_uri).path)
+                sym_abs_path = self._normalize_uri_path(loc.file_uri)
                 if sym_abs_path.startswith(project_path) or sym.kind in ("Namespace"):
                     continue
                 

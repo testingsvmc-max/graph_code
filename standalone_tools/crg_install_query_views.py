@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Add SQL views to an existing code-review-graph graph.db for ad-hoc querying.
+Add SQL views to an existing clangd-graph-rag ``graph.db`` for ad-hoc querying.
 
 Views:
   v_calls          — CALLS edges with caller_qn / callee_qn
@@ -10,9 +10,9 @@ Views:
   v_inherits       — INHERITS
 
 Example:
-  sqlite3 ".code-review-graph/graph.db" "SELECT * FROM v_callers_of WHERE function_qn LIKE '%main%' LIMIT 20;"
+  sqlite3 ".clangd-graph-rag/graph.db" "SELECT * FROM v_callers_of WHERE function_qn LIKE '%main%' LIMIT 20;"
 
-  python standalone_tools/crg_install_query_views.py --db ".code-review-graph/graph.db"
+  python standalone_tools/crg_install_query_views.py --db ".clangd-graph-rag/graph.db"
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ if str(_ROOT) not in sys.path:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description="Install SQL query views on CRG graph.db")
+    p = argparse.ArgumentParser(description="Install SQL query views on graph.db")
     p.add_argument("--db", type=Path, required=True)
     args = p.parse_args()
 

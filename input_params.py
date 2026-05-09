@@ -84,4 +84,12 @@ def add_logistic_args(parser: argparse.ArgumentParser):
 
 def add_source_parser_args(parser: argparse.ArgumentParser):
     """Adds arguments for configuring the Clang-based source code parser."""
-    parser.add_argument('--compile-commands', help='Path to the compile_commands.json file (or its directory). (Default: the project path)')
+    default_cc = os.getenv("COMPILE_COMMANDS_PATH")
+    parser.add_argument(
+        '--compile-commands',
+        default=default_cc,
+        help=(
+            "Path to the compile_commands.json file (or its directory). "
+            "Default: COMPILE_COMMANDS_PATH env var if set, else project path."
+        ),
+    )

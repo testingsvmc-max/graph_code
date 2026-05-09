@@ -1,0 +1,5 @@
+# Extra dependencies for Neo4j-based pipeline.
+# Install on top of core requirements:
+#   pip install -r requirements-core.txt -r requirements-neo4j.txt
+
+neo4j==5.28.1

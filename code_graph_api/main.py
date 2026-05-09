@@ -17,8 +17,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Body, FastAPI, HTTPException, Query
 
+from .graph_toolkit import invoke_tool, list_tools_catalog
 from .store import GraphStore
 
 _store: Optional[GraphStore] = None
@@ -58,6 +59,10 @@ def create_app(graph_path: Optional[str] = None) -> FastAPI:
             "meta": s.meta if s else {},
         }
 
+    @app.get("/graph/stats")
+    def graph_stats() -> Dict[str, Any]:
+        return get_store().list_graph_stats()
+
     @app.get("/nodes/{node_id:path}")
     def get_node(node_id: str) -> Dict[str, Any]:
         n = get_store().get_node(node_id)
@@ -68,6 +73,10 @@ def create_app(graph_path: Optional[str] = None) -> FastAPI:
     @app.get("/functions/search")
     def search_functions(q: str = Query(..., min_length=1), limit: int = Query(50, ge=1, le=500)) -> List[Dict[str, Any]]:
         return get_store().search_functions(q, limit=limit)
+
+    @app.get("/nodes/search")
+    def search_nodes(q: str = Query(..., min_length=1), limit: int = Query(50, ge=1, le=500)) -> List[Dict[str, Any]]:
+        return get_store().search_nodes(q, limit=limit)
 
     @app.get("/functions/{func_id:path}/callers")
     def callers(
@@ -146,6 +155,55 @@ def create_app(graph_path: Optional[str] = None) -> FastAPI:
 
         nodes_payload = [s.get_node(i) for i in sorted(seen) if s.get_node(i)]
         return {"center": func_id, "direction": direction, "depth": depth, "nodes": nodes_payload, "edges": edges_out}
+
+    @app.get("/graph/query")
+    def query_graph(
+        pattern: str = Query(...),
+        target: str = Query(...),
+        limit: int = Query(200, ge=1, le=5000),
+    ) -> Dict[str, Any]:
+        return get_store().query_graph(pattern=pattern, target=target, limit=limit)
+
+    @app.get("/graph/traverse")
+    def traverse_graph(
+        start: str = Query(...),
+        direction: str = Query("both", pattern="^(up|down|both)$"),
+        edge_type: str = Query("CALLS"),
+        depth: int = Query(2, ge=1, le=8),
+        limit: int = Query(500, ge=1, le=10000),
+    ) -> Dict[str, Any]:
+        return get_store().traverse_graph(start=start, direction=direction, edge_type=edge_type, depth=depth, limit=limit)
+
+    @app.post("/graph/impact-radius")
+    def impact_radius(
+        payload: Dict[str, Any],
+        max_depth: int = Query(2, ge=1, le=8),
+        limit: int = Query(500, ge=1, le=20000),
+    ) -> Dict[str, Any]:
+        changed_files = payload.get("changed_files") or []
+        if not isinstance(changed_files, list) or not all(isinstance(x, str) for x in changed_files):
+            raise HTTPException(400, "payload.changed_files must be a list[str]")
+        return get_store().impact_radius(changed_files=changed_files, max_depth=max_depth, limit=limit)
+
+    @app.get("/tools/catalog")
+    def tools_catalog() -> Dict[str, Any]:
+        """clangd-graph-rag export graph toolkit: MCP-style tool names (implemented + documented stubs)."""
+        return {"tools": list_tools_catalog()}
+
+    @app.post("/tools/invoke")
+    def tools_invoke(
+        payload: Dict[str, Any] = Body(...),
+    ) -> Any:
+        """
+        Invoke one tool by name. Body: ``{"tool": "list_graph_stats_tool", "arguments": {}}``.
+        """
+        tool = str(payload.get("tool") or payload.get("name") or "")
+        if not tool:
+            raise HTTPException(400, "Missing tool name (body.tool)")
+        arguments = payload.get("arguments")
+        if arguments is not None and not isinstance(arguments, dict):
+            raise HTTPException(400, "arguments must be a JSON object")
+        return invoke_tool(get_store(), tool, arguments if isinstance(arguments, dict) else {})
 
     return app
 

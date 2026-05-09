@@ -2,9 +2,9 @@
 """
 MR / CI helper: install SQL views, print caller/callee probe, optional vis-network HTML.
 
-Requires a code-review-graph ``graph.db`` (``code-review-graph build`` in the target repo).
+Requires a clangd-graph-rag SQLite ``graph.db`` (see ``export_code_graph_db``).
 
-  python standalone_tools/crg_mr_pipeline.py --db path/to/.code-review-graph/graph.db
+  python standalone_tools/crg_mr_pipeline.py --db path/to/.clangd-graph-rag/graph.db
   python standalone_tools/crg_mr_pipeline.py --db path/to/graph.db --html out.html --center "demo/f.py::main"
 """
 
@@ -21,7 +21,7 @@ if str(_ROOT) not in sys.path:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description="CRG graph.db: views + caller/callee probe + optional HTML")
+    p = argparse.ArgumentParser(description="graph.db: views + caller/callee probe + optional HTML")
     p.add_argument("--db", type=Path, required=True, help="Path to graph.db")
     p.add_argument(
         "--center",

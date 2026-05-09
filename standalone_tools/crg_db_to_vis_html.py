@@ -1,18 +1,15 @@
 #!/usr/bin/env python3
 """
-Read a code-review-graph SQLite DB (nodes/edges) and write a vis-network HTML file.
+Read a clangd-graph-rag SQLite ``graph.db`` (nodes/edges; graph-review–compatible schema)
+and write a vis-network HTML file.
 
-Upstream project: https://github.com/tirth8205/code-review-graph
-  Build DB:  code-review-graph build
-  Default DB: <repo>/.code-review-graph/graph.db
-  Built-in D3 HTML: code-review-graph visualize
-
-This script is an alternative HTML export (same engine as export_code_graph_html.py).
+Schema lineage and related tooling are documented in the README; this script is an
+alternative HTML export (same engine as ``export_code_graph_html.py``).
 
 Example:
   python standalone_tools/crg_db_to_vis_html.py ^
-    --db "D:\\myrepo\\.code-review-graph\\graph.db" ^
-    -o "D:\\myrepo\\.code-review-graph\\graph_vis.html" ^
+    --db "D:\\myrepo\\.clangd-graph-rag\\graph.db" ^
+    -o "D:\\myrepo\\.clangd-graph-rag\\graph_vis.html" ^
     --edge-kinds CALLS,IMPORTS_FROM
 """
 
@@ -28,12 +25,12 @@ if str(_ROOT) not in sys.path:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="CRG graph.db → vis-network HTML")
+    parser = argparse.ArgumentParser(description="graph.db → vis-network HTML")
     parser.add_argument(
         "--db",
         type=Path,
         required=True,
-        help="Path to code-review-graph graph.db",
+        help="Path to graph.db (clangd-graph-rag export)",
     )
     parser.add_argument("-o", "--output", type=Path, required=True, help="Output .html")
     parser.add_argument(
@@ -50,7 +47,7 @@ def main() -> int:
     parser.add_argument(
         "--stub-missing-call-targets",
         action="store_true",
-        help="Add placeholder nodes for CALLS whose callee has no nodes row (large HTML; see CRG export docs)",
+        help="Add placeholder nodes for CALLS whose callee has no nodes row (large HTML; see README)",
     )
     parser.add_argument(
         "--inter-file-full",
