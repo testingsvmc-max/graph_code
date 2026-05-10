@@ -496,6 +496,7 @@ Once the code graph is built and enriched, you can interact with it using natura
 
 1.  **`graph_mcp_server.py`**: This is a tool server that exposes the Neo4j graph to an AI agent. It provides example tools like `get_graph_schema`, `execute_cypher_query`, and `get_file_source_code_by_path`. They are bare minimum yet super powerful tools for AI agent to interact with the graph.
 2.  **`rag_adk_agent/`**: This directory contains an example agent built with the Google Agent Development Kit (ADK). This agent is pre-configured to use the tools from the MCP server to answer questions about your codebase. It just scratches the surface of what is possible with the tools provided.
+3.  **YAML/JSON export agent (no Neo4j, no MCP)**: `rag_adk_agent/export_graph_agent.py` defines `root_agent` that calls **`graph_toolkit`** as plain Python tools (`list_export_graph_tools`, `invoke_export_graph_tool`). Point **`CODE_GRAPH_YAML`** or **`GRAPH_PATH`** at `code_graph.yaml` (or JSON), set your LLM API key for LiteLLM (e.g. `DEEPSEEK_API_KEY`), then run `python rag_adk_agent/run_export_graph_agent.py --graph <path> --query "..."` or `adk run rag_adk_agent.export_graph_agent` with the same env vars. See [rag_adk_agent/README.md](rag_adk_agent/README.md).
 
 ### Example Workflow
 
@@ -522,6 +523,8 @@ Once the code graph is built and enriched, you can interact with it using natura
     adk run rag_adk_agent
     ```
     You can now ask the agent questions.
+
+**YAML-only agent (no `graph_mcp_server.py`):** set `CODE_GRAPH_YAML` to your export, then e.g. `adk run rag_adk_agent.export_graph_agent` or `python rag_adk_agent/run_export_graph_agent.py --graph path/to/code_graph.yaml --query "Who calls foo?"`.
 
 For more details, see the documentation for Agentic Components section in [Design Documentation](./docs/README.md#integration-and-agents).
 
