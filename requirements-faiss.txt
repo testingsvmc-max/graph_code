@@ -1,0 +1,4 @@
+# Optional: FAISS index over code graph RAG chunks (cosine via L2-normalized inner product)
+#   pip install -r requirements-core.txt -r requirements-faiss.txt
+faiss-cpu>=1.8.0.post1
+numpy>=1.24.0

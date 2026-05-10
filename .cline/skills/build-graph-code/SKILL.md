@@ -64,3 +64,5 @@ python -m code_graph_api <project_path>/.clangd-graph-rag/code_graph.yaml --host
 ```
 
 Optional quality check: `python eval/run_graph_eval.py --yaml <project_path>/.clangd-graph-rag/code_graph.yaml` ([eval/README.md](../../../eval/README.md)).
+
+8. To **embed** the same YAML into a vector store (Chroma / FAISS / JSONL), use the **embed-graph-vectordb** skill.

@@ -13,6 +13,7 @@ Authoritative steps and options live in **[README.md](README.md)** (Quick Start,
 | Query callers/callees / traversal | `python -m code_graph_api <code_graph.yaml> --port 8090`, or `standalone_tools/query_code_graph.py`, or `standalone_tools/crg_db_query.py --db …` for SQLite |
 | Stable `*_tool` names (stats, query, traverse, impact, …) | [README — Export graph tools](README.md#export-graph-tools--mcp-style-_tool-api-http--mcp--cli): HTTP `GET /tools/catalog` / `POST /tools/invoke`, CLI `standalone_tools/code_graph_tools.py`, MCP `code_graph_mcp_tools_server.py` (default port **8810**) |
 | Run **ADK** coding agent (YAML or Neo4j) | `.cline/skills/run-graph-agent`, [rag_adk_agent/README.md](rag_adk_agent/README.md) |
+| **Embed graph → vector DB** (JSONL / Chroma / FAISS, offline ST; omit `--max-nodes` for full index) | `.cline/skills/embed-graph-vectordb`, [docs/offline_embeddings.md](docs/offline_embeddings.md) |
 | Graph quality metrics (CI-style) | [eval/README.md](eval/README.md), `python eval/run_graph_eval.py --help` |
 | Full Neo4j GraphRAG + Cypher MCP | [README — End-to-end](README.md#end-to-end-build-the-graph-from-scratch), `graph_mcp_server.py`, `NEO4J_URI` / `NEO4J_USER` / `NEO4J_PASSWORD` |
 
@@ -24,6 +25,7 @@ Under `.cline/skills/`:
 - **build-graph-code** — `build_graph_code.py --also-db`
 - **query-graph-code** — REST on YAML export, SQLite CLI, optional MCP-style tools
 - **run-graph-agent** — `adk run` / `adk web` or `run_export_graph_agent.py`; Neo4j+MCP vs YAML-only paths
+- **embed-graph-vectordb** — `export_graph_rag_chunks`, `faiss_code_graph_index`; Chroma / FAISS / JSONL+embeddings
 
 ## Neo4j-only agent notes (optional)
 

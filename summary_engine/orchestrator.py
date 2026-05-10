@@ -296,6 +296,15 @@ class SummaryEngine(
 
         summaries = [node['summary'] for node in nodes_to_embed]
         embeddings = self.embedding_client.generate_embeddings(summaries)
+        if len(embeddings) != len(nodes_to_embed):
+            raise RuntimeError(
+                f"Embedding batch size mismatch: got {len(embeddings)} vectors for {len(nodes_to_embed)} nodes."
+            )
+        if embeddings:
+            expected = len(embeddings[0])
+            for i, emb in enumerate(embeddings):
+                if not emb or len(emb) != expected:
+                    raise RuntimeError(f"Invalid embedding at row {i}: length {len(emb) if emb else 0}, expected {expected}")
 
         update_params = []
         for node, embedding in zip(nodes_to_embed, embeddings):

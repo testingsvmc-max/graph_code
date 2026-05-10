@@ -545,6 +545,14 @@ These scripts are the core components of the pipeline and can also be run standa
     *   **Purpose**: Manages the RAG summary cache (backup and restore).
     *   **Usage**: `python3 -m summary_engine backup`
 
+*   **`python standalone_tools/export_graph_rag_chunks.py`**:
+    *   **Purpose**: Export `code_graph.yaml` / JSON to **RAG chunks** for an external vector DB: **`--backend jsonl`** (portable lines: `id`, `text`, `metadata`, optional `--with-embeddings`) or **`--backend chroma`** (persistent Chroma; requires `pip install -r requirements-vectordb.txt`). Uses the same local **SentenceTransformer** settings as Neo4j embedding (`SENTENCE_TRANSFORMER_MODEL`, default 384-dim `all-MiniLM-L6-v2`). Offline embedding env + troubleshooting: [docs/offline_embeddings.md](docs/offline_embeddings.md); design: [docs/graph_to_vector_rag.md](docs/graph_to_vector_rag.md).
+    *   **Usage**: `python standalone_tools/export_graph_rag_chunks.py path/to/code_graph.yaml --backend jsonl` → writes `rag_export/chunks.jsonl` + `manifest.json` next to the graph file by default. **`--max-nodes` is optional** — omit it to export/embed **every** matching node; pass `N` only to cap for quick tests.
+
+*   **`python standalone_tools/faiss_code_graph_index.py`**:
+    *   **Purpose**: Build a **FAISS** `IndexFlatIP` index (cosine via L2-normalized vectors) from **`--graph`** or pre-embedded **`--chunks`** JSONL; **`query`** subcommand runs semantic top‑`k` search + optional `--labels` filter. Requires `pip install -r requirements-faiss.txt`.
+    *   **Usage**: `python standalone_tools/faiss_code_graph_index.py build --graph path/to/code_graph.yaml --out-dir ./rag_faiss` then `python standalone_tools/faiss_code_graph_index.py query --index-dir ./rag_faiss --text "buffer overflow" -k 5`. **`--max-nodes` is optional** on `build` — omit for a **full** index over all matching nodes; use `--max-nodes N` for smoke tests.
+
 *   **`python3 -m neo4j_manager`**:
     *   **Purpose**: A command-line utility for database maintenance.
     *   **Functionality**: Includes tools to inspect schema, clean properties, and query call graph data quickly from terminal.

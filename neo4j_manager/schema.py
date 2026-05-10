@@ -1,5 +1,6 @@
 import logging
 import json
+import os
 from typing import List, Dict, Optional, Any
 from collections import defaultdict
 
@@ -99,9 +100,19 @@ class SchemaMixin:
             session.run(schema_cypher)
 
     def create_vector_indexes(self) -> None:
-        """Creates vector indices for summary embeddings."""
+        """Creates vector indices for summary embeddings (Neo4j optional pipeline).
+
+        Vector width defaults to 384. Prefer ``EMBEDDING_DIMENSION``; ``NEO4J_VECTOR_DIMENSION`` is a legacy alias.
+        """
+        raw = os.environ.get("EMBEDDING_DIMENSION") or os.environ.get("NEO4J_VECTOR_DIMENSION") or "384"
+        try:
+            dim = int(raw)
+        except ValueError:
+            logger.warning("Invalid EMBEDDING_DIMENSION/NEO4J_VECTOR_DIMENSION=%r; using 384.", raw)
+            dim = 384
         index_queries = [
-            "CREATE VECTOR INDEX summary_embeddings IF NOT EXISTS FOR (e:ENTITY) ON (e.summaryEmbedding) OPTIONS {indexConfig: {`vector.dimensions`: 384, `vector.similarity_function`: 'cosine'}}",
+            "CREATE VECTOR INDEX summary_embeddings IF NOT EXISTS FOR (e:ENTITY) ON (e.summaryEmbedding) "
+            f"OPTIONS {{indexConfig: {{`vector.dimensions`: {dim}, `vector.similarity_function`: 'cosine'}}}}",
         ]
 
         with self.driver.session() as session:

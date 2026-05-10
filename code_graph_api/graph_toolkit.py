@@ -76,8 +76,9 @@ def tool_semantic_search_nodes(store: GraphStore, args: Dict[str, Any]) -> Dict[
     }
     if mode == "semantic" or args.get("meaning"):
         out["note"] = (
-            "Vector semantic search requires graph embeddings (Neo4j summary embeddings or a custom pipeline). "
-            "Falling back to lexical search_nodes."
+            "True vector semantic search needs per-node embeddings in your store (YAML export has none by default). "
+            "Use export_graph_rag_chunks --with-embeddings, a FAISS/Chroma index, or your own pipeline; "
+            "falling back to lexical search_nodes."
         )
     return _ok(out)
 
@@ -344,7 +345,7 @@ def tool_build_or_update_graph(store: GraphStore, args: Dict[str, Any]) -> Dict[
         "Graph build/update is not executed inside the in-memory API.",
         alternatives=[
             "python standalone_tools/build_graph_code.py <project> --index-file <clangd-index.yaml> --compile-commands <compile_commands.json> --also-db",
-            "python graph_builder.py ...  # Neo4j pipeline",
+            "python graph_builder.py ...  # optional full Neo4j ingest",
         ],
     )
 
@@ -352,8 +353,12 @@ def tool_build_or_update_graph(store: GraphStore, args: Dict[str, Any]) -> Dict[
 def tool_embed_graph(store: GraphStore, args: Dict[str, Any]) -> Dict[str, Any]:
     _ = store, args
     return _unsupported(
-        "Embedding generation for this export is not wired to YAML GraphStore.",
-        alternatives=["Use Neo4j pipeline with summary generation and graph_mcp_server.py vector indexes."],
+        "Embedding generation is not executed inside the in-memory GraphStore API.",
+        alternatives=[
+            "python standalone_tools/export_graph_rag_chunks.py <code_graph.yaml> --backend jsonl --with-embeddings",
+            "python standalone_tools/faiss_code_graph_index.py build --graph <code_graph.yaml> --out-dir ./rag_faiss",
+            "python standalone_tools/export_graph_rag_chunks.py <code_graph.yaml> --backend chroma  (requires chromadb)",
+        ],
     )
 
 

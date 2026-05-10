@@ -8,7 +8,6 @@ file descriptor explosion when using FanoutCache.
 
 import os, time
 import logging
-import litellm
 import hashlib
 import shutil
 import json
@@ -16,8 +15,12 @@ import asyncio
 import threading
 import atexit
 import math
-from typing import Optional, Any
-import resource
+from typing import Any, List, Optional
+
+try:
+    import resource
+except ImportError:  # Windows: no POSIX resource module
+    resource = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -60,6 +63,8 @@ class LlmCacheManager:
         opens connections to the cache. The FD requirement is now much lower.
         Needed FDs = (1 thread * shards * ~3 FDs) + overhead.
         """
+        if resource is None:
+            return
         soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
         
         # Base requirement: shards * 3 (for SQLite) + room for network sockets and files
@@ -248,18 +253,24 @@ class LiteLlmClient(LlmClient):
 
     def get_context_window_size(self) -> int:
         try:
+            import litellm
+
             # get_model_info provides granular limits (input vs output)
             info = litellm.get_model_info(self.model_name)
             return info.get("max_input_tokens") or info.get("max_tokens") or 128000
         except Exception:
             # Fallback for models not in the LiteLLM registry (e.g. some local Ollama models)
             try:
+                import litellm
+
                 return litellm.get_max_tokens(self.model_name) or 128000
             except Exception:
                 return 128000
 
     async def _async_generate(self, prompt: str) -> str:
         try:
+            import litellm
+
             response = await litellm.acompletion(
                 model=self.model_name,
                 messages=[{"role": "user", "content": prompt}],
@@ -342,6 +353,12 @@ def setup_llm_client(args, project_path: str) -> LlmClient:
 
 # --- Embedding Clients ---
 # Stays synchronous as it's typically CPU/GPU bound locally.
+#
+# Environment:
+#   SENTENCE_TRANSFORMER_MODEL — HuggingFace id or local path (default: all-MiniLM-L6-v2 → 384 dims).
+#   EMBEDDING_DIMENSION (alias: NEO4J_VECTOR_DIMENSION) — declare vector width for indexes/manifests; must match the model (default 384).
+#
+# One SentenceTransformer per process (singleton) to avoid loading the model multiple times.
 
 class EmbeddingClient:
     """Base class for embedding clients."""
@@ -350,25 +367,131 @@ class EmbeddingClient:
     def generate_embeddings(self, texts: list[str], show_progress_bar: bool = True) -> list[list[float]]:
         raise NotImplementedError
 
+    def get_embedding_dimension(self) -> int:
+        """Vector size produced by ``generate_embeddings``."""
+        raise NotImplementedError
+
+
 class SentenceTransformerClient(EmbeddingClient):
-    """Client that uses a local SentenceTransformer model."""
+    """Client that uses a local SentenceTransformer model (offline)."""
     is_local: bool = True
 
-    def __init__(self):
+    def __init__(self) -> None:
         try:
             from sentence_transformers import SentenceTransformer
-        except ImportError:
-            raise ImportError("The 'sentence-transformers' package is required. Run 'pip install sentence-transformers'.")
-        
+        except ImportError as exc:
+            raise ImportError(
+                "The 'sentence-transformers' package is required for offline embeddings. "
+                "Run: pip install sentence-transformers"
+            ) from exc
+
         model_name = os.environ.get("SENTENCE_TRANSFORMER_MODEL", "all-MiniLM-L6-v2")
-        logger.info(f"Loading local SentenceTransformer model: {model_name}")
+        logger.info("Loading local SentenceTransformer model: %s", model_name)
         self.model = SentenceTransformer(model_name)
+        self._dim: Optional[int] = None
+
+    def get_embedding_dimension(self) -> int:
+        if self._dim is None:
+            getter = getattr(self.model, "get_embedding_dimension", None) or getattr(
+                self.model, "get_sentence_embedding_dimension", None
+            )
+            if callable(getter):
+                self._dim = int(getter())
+            else:
+                enc_kw: dict[str, Any] = {"show_progress_bar": False, "convert_to_numpy": True}
+                dev = os.environ.get("SENTENCE_TRANSFORMER_DEVICE", "").strip()
+                if dev:
+                    enc_kw["device"] = dev
+                probe = self.model.encode(["__embedding_dim_probe__"], **enc_kw)
+                self._dim = int(probe.shape[1])
+            logger.info("SentenceTransformer embedding dimension: %s", self._dim)
+            self._warn_if_declared_embedding_dim_mismatch()
+        return self._dim
+
+    def _warn_if_declared_embedding_dim_mismatch(self) -> None:
+        env_dims = os.environ.get("EMBEDDING_DIMENSION") or os.environ.get("NEO4J_VECTOR_DIMENSION")
+        if env_dims is None:
+            return
+        try:
+            expected = int(env_dims)
+        except ValueError:
+            logger.warning("Invalid EMBEDDING_DIMENSION / NEO4J_VECTOR_DIMENSION=%r; ignoring.", env_dims)
+            return
+        if expected != self._dim:
+            logger.warning(
+                "Embedding model outputs dim=%s but EMBEDDING_DIMENSION/NEO4J_VECTOR_DIMENSION=%s. "
+                "Update the env (or pick a matching model) so FAISS/Chroma/JSONL exports and any vector index stay aligned.",
+                self._dim,
+                expected,
+            )
 
     def generate_embeddings(self, texts: list[str], show_progress_bar: bool = True) -> list[list[float]]:
-        embeddings = self.model.encode(texts, show_progress_bar=show_progress_bar)
-        return [emb.tolist() for emb in embeddings]
+        if not texts:
+            return []
+        cleaned: List[str] = []
+        for t in texts:
+            if t is None:
+                s = ""
+            else:
+                s = str(t).strip()
+            if not s:
+                s = " "
+            cleaned.append(s)
+
+        enc_kw: dict[str, Any] = {"show_progress_bar": show_progress_bar, "convert_to_numpy": True}
+        dev = os.environ.get("SENTENCE_TRANSFORMER_DEVICE", "").strip()
+        if dev:
+            enc_kw["device"] = dev
+        embeddings = self.model.encode(cleaned, **enc_kw)
+        n = int(embeddings.shape[0])
+        if n != len(cleaned):
+            raise RuntimeError(
+                f"SentenceTransformer.encode returned {n} rows for {len(cleaned)} inputs; "
+                "refusing misaligned batch (would corrupt downstream vector files or DB writes)."
+            )
+        dim = int(embeddings.shape[1])
+        if self._dim is None:
+            self._dim = dim
+            logger.info("SentenceTransformer embedding dimension: %s", self._dim)
+            self._warn_if_declared_embedding_dim_mismatch()
+        elif dim != self._dim:
+            raise RuntimeError(
+                f"Inconsistent embedding width: expected {self._dim}, got {dim} (check model / inputs)."
+            )
+
+        out: List[List[float]] = []
+        for i in range(n):
+            row = embeddings[i].tolist()
+            if len(row) != dim:
+                raise RuntimeError(f"Row {i}: expected length {dim}, got {len(row)}")
+            out.append(row)
+        return out
+
+
+_embedding_singleton: Optional[SentenceTransformerClient] = None
+_embedding_singleton_lock = threading.Lock()
 
 
 def get_embedding_client(api_name: str) -> EmbeddingClient:
-    logger.info("Initializing local SentenceTransformer client for embeddings.")
-    return SentenceTransformerClient()
+    """
+    Return the process-wide offline embedding client (SentenceTransformer).
+
+    ``api_name`` is kept for callers (e.g. ``\"local\"``, summary engine passing ``llm_api``);
+    only the local SentenceTransformer backend exists today.
+    """
+    if api_name and str(api_name).lower() not in ("local", "default", ""):
+        logger.warning(
+            "get_embedding_client(%r): only local SentenceTransformer is implemented; ignoring api_name.",
+            api_name,
+        )
+    global _embedding_singleton
+    with _embedding_singleton_lock:
+        if _embedding_singleton is None:
+            logger.info("Initializing local SentenceTransformer client for embeddings (singleton).")
+            _embedding_singleton = SentenceTransformerClient()
+        return _embedding_singleton
+
+
+def get_offline_embedding_dimension() -> int:
+    """Embedding width for the configured model (loads singleton client if needed)."""
+    return get_embedding_client("local").get_embedding_dimension()
