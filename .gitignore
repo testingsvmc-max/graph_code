@@ -8,3 +8,7 @@ Thumbs.db
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# Offline embedding weights (see embedding_models/README.md)
+embedding_models/sentence-transformers/
+embedding_models/huggingface_cache/

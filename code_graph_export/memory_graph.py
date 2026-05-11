@@ -369,19 +369,41 @@ def build_code_graph_dict(
     num_parse_workers: int,
     log_batch_size: int = 2000,
     ingest_batch_size: int = 4000,
+    index_source_root: Optional[str] = None,
+    local_source_root: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Run the same pre-Neo4j passes as graph_builder (parse sources, index, enrich), then materialize nodes/edges.
+
+    When ``index_source_root`` is set (Linux/CI path prefix inside the YAML and compile_commands), paths are
+    remapped to the Windows (or local) checkout — same semantics as ``graph_builder.py --index-source-root``.
     """
+    from types import SimpleNamespace
+
+    from index_path_remap import compilation_remap_kwargs_from_args
+    from symbol_parser import build_parser_for_ingestion_args
+
     project_path = str(Path(project_path).resolve())
     index_yaml_path = str(Path(index_yaml_path).resolve())
 
     debugger = Debugger(turnon=False)
-    compilation_manager = CompilationManager(project_path=project_path, compile_commands_path=compile_commands_path)
-    compilation_manager.parse_folder(project_path, num_parse_workers, new_commit=None)
+    ns = SimpleNamespace(
+        project_path=project_path,
+        index_file=index_yaml_path,
+        log_batch_size=log_batch_size,
+        num_parse_workers=num_parse_workers,
+        index_source_root=index_source_root,
+        local_source_root=local_source_root,
+    )
+    symbol_parser, parse_kw = build_parser_for_ingestion_args(ns, debugger=debugger)
+    symbol_parser.parse(**parse_kw)
 
-    symbol_parser = SymbolParser(index_file_path=index_yaml_path, log_batch_size=log_batch_size, debugger=debugger)
-    symbol_parser.parse(num_workers=num_parse_workers)
+    compilation_manager = CompilationManager(
+        project_path=project_path,
+        compile_commands_path=compile_commands_path,
+        **compilation_remap_kwargs_from_args(ns),
+    )
+    compilation_manager.parse_folder(project_path, num_parse_workers, new_commit=None)
 
     SymbolEnricher(symbol_parser, compilation_manager).enrich_symbols()
 

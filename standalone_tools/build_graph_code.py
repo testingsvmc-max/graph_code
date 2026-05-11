@@ -18,6 +18,8 @@ _ROOT = Path(__file__).resolve().parents[1]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+import input_params
+
 
 def _is_tty() -> bool:
     return sys.stdin.isatty()
@@ -72,6 +74,7 @@ def main() -> int:
     parser.add_argument("--format", choices=("json", "yaml", "auto"), default="auto")
     parser.add_argument("--also-db", action="store_true", help="Also write SQLite graph.db after YAML/JSON export")
     parser.add_argument("--db-output", default=None, help="SQLite DB output path (default: <project>/.clangd-graph-rag/graph.db)")
+    input_params.add_cross_machine_path_args(parser)
     args = parser.parse_args()
 
     project = _resolve_project_path(args.project_path)
@@ -126,6 +129,10 @@ def main() -> int:
     ]
     if args.format != "auto":
         cmd.extend(["--format", args.format])
+    if getattr(args, "index_source_root", None) and str(args.index_source_root).strip():
+        cmd.extend(["--index-source-root", str(args.index_source_root).strip().strip('"')])
+    if getattr(args, "local_source_root", None) and str(args.local_source_root).strip():
+        cmd.extend(["--local-source-root", str(args.local_source_root).strip().strip('"')])
 
     print("+", " ".join(cmd))
     rc = subprocess.call(cmd)

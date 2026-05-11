@@ -40,6 +40,12 @@ Or to query callers/callees and traverse call graph:
 search callers/callees and graph traversal
 ```
 
+Or to query **graph file**, **SQLite graph.db**, **FAISS / vector DB**, or **Neo4j embeddings**:
+
+```text
+query graph db, vector db, sqlite, or embeddings
+```
+
 Cline can use project skills under `.cline/skills/` and run:
 
 ```bash
@@ -88,6 +94,9 @@ During setup, the script asks for confirmation whether you want to provide a
    ```bash
    # default profile: no Neo4j
    pip install -r requirements-core.txt
+
+   # optional: accurate token counts for RAG summarization (tiktoken has prebuilt wheels on common Python versions)
+   # pip install -r requirements-tiktoken.txt
 
    # optional Neo4j extras
    # pip install -r requirements-core.txt -r requirements-neo4j.txt
@@ -169,6 +178,19 @@ API extras (still no MCP):
 - `GET /graph/traverse?start=<id>&direction=both&edge_type=CALLS&depth=2`
 - `POST /graph/impact-radius` with body: `{"changed_files":["src/a.c","include/a.h"]}`
 
+### Query reference: graph file, SQLite graph.db, vector DB, embeddings
+
+Use this table to pick the right interface after you have built artifacts (Quick Start steps 3–8 above). Cline skills: **search-graph-export** (YAML/JSON structural), **search-graph-db** (`graph.db` structural), **search-graph-semantic** (vector / semantic query), **query-graph-code** (router), **embed-graph-vectordb** (build chunks + FAISS / Chroma / JSONL).
+
+| Store | Artifact | Structural queries (callers, traverse, impact) | Semantic / vector search | Commands |
+|-------|-----------|--------------------------------------------------|----------------------------|----------|
+| **Graph file** | `code_graph.yaml` / `.json` | Yes | No (export chunks + FAISS separately) | `python -m code_graph_api <yaml> --host 127.0.0.1 --port 8090`; `python standalone_tools/query_code_graph.py <yaml> …`; `python standalone_tools/code_graph_tools.py <yaml> catalog \| invoke …`; MCP: `python code_graph_mcp_tools_server.py <yaml>` (port **8810**) |
+| **SQLite graph DB** | `graph.db` | Yes | No | `python standalone_tools/crg_db_query.py --db <graph.db> search \| callers \| callees \| call-graph …`; HTTP: `python -m code_graph_api.crg_db_main <graph.db> --host 127.0.0.1 --port 8091` |
+| **Vector DB (FAISS)** | Directory with `vectors.faiss`, `ids.json`, `metadata.json` | No | Yes (cosine / top‑k) | `python standalone_tools/faiss_code_graph_index.py query --index-dir <dir> --text "…" -k 10 --json` |
+| **Embed chunks (JSONL)** | `chunks.jsonl` (+ optional `embedding` per line) | No | Yes (your loader or FAISS from chunks) | `export_graph_rag_chunks.py --backend jsonl --with-embeddings`; see [docs/graph_to_vector_rag.md](docs/graph_to_vector_rag.md) |
+| **Chroma** | Folder under `--out-dir` from `--backend chroma` | No | Yes (`chromadb` API) | See **embed-graph-vectordb** skill and [docs/offline_embeddings.md](docs/offline_embeddings.md) |
+| **Neo4j + embeddings on nodes** | Bolt graph | Yes (Cypher, MCP) | Yes (if summaries/embeddings ingested) | Neo4j Browser; `python -m neo4j_manager search …`; `graph_mcp_server.py` — see [End-to-end](#end-to-end-build-the-graph-from-scratch) and [Interacting with the Graph](#interacting-with-the-graph-ai-agent) |
+
 ---
 
 ### Current Schema
@@ -183,6 +205,7 @@ When building a code graph for the Linux kernel (WSL2 release) on a workstation 
 
 ## Table of Contents
 - [Quick Start (No Neo4j)](#quick-start-no-neo4j)
+- [Query reference (graph file, SQLite, vectors, embeddings)](#query-reference-graph-file-sqlite-graphdb-vector-db-embeddings)
 - [Why This Project?](#why-this-project)
 - [Why Clang instead of Tree-sitter?](#why-clang-instead-of-tree-sitter)
 - [Key Features & Design Principles](#key-features--design-principles)

@@ -13,6 +13,31 @@ def add_core_input_args(parser: argparse.ArgumentParser):
     parser.add_argument('index_file', type=Path, help='Path to the clangd index YAML file (or .pkl cache).')
     parser.add_argument('project_path', type=Path, help='Root path of the project being indexed. Or for call graph builder, it is the path to a directory for function span provider to scan.')
 
+
+def add_cross_machine_path_args(parser: argparse.ArgumentParser):
+    """When the index was built on another machine (paths inside YAML differ from this checkout)."""
+    group = parser.add_argument_group(
+        "Cross-machine index paths",
+        "Rewrite FileURI paths in the clangd YAML so they match this machine (e.g. CI Linux paths vs D:\\\\src on Windows).",
+    )
+    group.add_argument(
+        "--index-source-root",
+        type=str,
+        default=None,
+        metavar="DIR",
+        help=(
+            "POSIX root as on the indexer machine (e.g. /home/dpi/build_server/android/repo). "
+            "Use a plain string — do not rely on Windows resolving /home/... paths."
+        ),
+    )
+    group.add_argument(
+        "--local-source-root",
+        type=str,
+        default=None,
+        metavar="DIR",
+        help="The same logical root on this machine. Defaults to project_path when --index-source-root is set.",
+    )
+
 def add_worker_args(parser: argparse.ArgumentParser):
     """Adds arguments related to parallel workers."""
     try:

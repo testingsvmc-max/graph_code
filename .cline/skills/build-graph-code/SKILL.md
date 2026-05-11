@@ -57,12 +57,19 @@ python standalone_tools/build_graph_code.py <project_path> --index-file <path/to
 python standalone_tools/build_graph_code.py <project_path> --index-file <path/to/index.yaml> --compile-commands <path/to/compile_commands.json> --also-db --db-output <custom/path/graph.db>
 ```
 
-7. After a successful build, typical next steps (README):
+7. After a successful build, **query without starting HTTP** (see **search-graph-export** / **search-graph-db**):
 
 ```bash
-python -m code_graph_api <project_path>/.clangd-graph-rag/code_graph.yaml --host 127.0.0.1 --port 8090
+python standalone_tools/query_code_graph.py <project_path>/.clangd-graph-rag/code_graph.yaml stats
+python standalone_tools/query_code_graph.py <project_path>/.clangd-graph-rag/code_graph.yaml search "main"
 ```
+
+With **`--also-db`**, query SQLite directly: `python standalone_tools/crg_db_query.py --db <project_path>/.clangd-graph-rag/graph.db search "…"` (optional HTTP: `python -m code_graph_api.crg_db_main … --port 8091`).
+
+Optional long-running REST on YAML: `python -m code_graph_api <project_path>/.clangd-graph-rag/code_graph.yaml --host 127.0.0.1 --port 8090`.
 
 Optional quality check: `python eval/run_graph_eval.py --yaml <project_path>/.clangd-graph-rag/code_graph.yaml` ([eval/README.md](../../../eval/README.md)).
 
-8. To **embed** the same YAML into a vector store (Chroma / FAISS / JSONL), use the **embed-graph-vectordb** skill.
+8. To **embed** the same YAML into a vector store (Chroma / FAISS / JSONL) and run **semantic query**, use **embed-graph-vectordb** (build) and **search-graph-semantic** (query).
+
+9. **Where to search:** YAML / JSON → **search-graph-export**; `graph.db` → **search-graph-db**; vectors → **search-graph-semantic**; unsure → **query-graph-code**.

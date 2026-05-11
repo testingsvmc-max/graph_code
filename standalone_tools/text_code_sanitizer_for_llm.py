@@ -1,6 +1,13 @@
 import re
-import tiktoken
+import sys
+from pathlib import Path
 from typing import List, Tuple
+
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+import tiktoken_compat as tiktoken
 
 # ---------------------------------------------------------------
 # 1️⃣  Sanitize / unsanitize special tokens

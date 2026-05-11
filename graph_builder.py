@@ -26,7 +26,6 @@ from graph_ingester import (
     ClangdCallGraphExtractor, 
     IncludeRelationProvider
 )
-from symbol_parser import SymbolParser
 from neo4j_manager import Neo4jManager
 from memory_debugger import Debugger
 from git_manager import GitManager
@@ -86,19 +85,20 @@ class GraphBuilder:
 
     def _pass_0_parse_symbols(self):
         logger.info("\n--- Starting Phase 0: Parsing Clangd Index ---")
-        self.symbol_parser = SymbolParser(
-            index_file_path=self.args.index_file,
-            log_batch_size=self.args.log_batch_size,
-            debugger=self.debugger
-        )
-        self.symbol_parser.parse(num_workers=self.args.num_parse_workers)
+        from symbol_parser import build_parser_for_ingestion_args
+
+        self.symbol_parser, parse_kw = build_parser_for_ingestion_args(self.args, debugger=self.debugger)
+        self.symbol_parser.parse(**parse_kw)
         logger.info("--- Finished Phase 0 ---")
 
     def _pass_1_parse_sources(self):
         logger.info("\n--- Starting Phase 1: Parsing Source Code ---")
+        from index_path_remap import compilation_remap_kwargs_from_args
+
         self.compilation_manager = CompilationManager(
             project_path=self.args.project_path,
-            compile_commands_path=self.args.compile_commands
+            compile_commands_path=self.args.compile_commands,
+            **compilation_remap_kwargs_from_args(self.args),
         )
         self.compilation_manager.parse_folder(self.args.project_path, self.args.num_parse_workers, new_commit=self.args.new_commit)
         logger.info("--- Finished Phase 1 ---")
@@ -204,6 +204,7 @@ def main():
     
     # Add argument groups from the centralized module
     input_params.add_core_input_args(parser)
+    input_params.add_cross_machine_path_args(parser)
     input_params.add_worker_args(parser)
     input_params.add_batching_args(parser)
     input_params.add_rag_args(parser)

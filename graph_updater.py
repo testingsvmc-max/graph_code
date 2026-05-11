@@ -14,7 +14,7 @@ from git.exc import InvalidGitRepositoryError
 import input_params
 from git_manager import GitManager
 from neo4j_manager import Neo4jManager
-from symbol_parser import SymbolParser
+from symbol_parser import SymbolParser, build_parser_for_ingestion_args
 from summary_driver import IncrementalSummarizer
 from graph_ingester import IncludeRelationProvider
 from updater_engine import GraphUpdateScopeBuilder, GraphDebugManager
@@ -81,8 +81,8 @@ class GraphUpdater:
 
             # Phase 3: Rebuild the dirty scope using the dedicated builder
             # 3.1. We build the full symbol parser to get all the symbols info.
-            full_symbol_parser = SymbolParser(self.args.index_file)
-            full_symbol_parser.parse(self.args.num_parse_workers)
+            full_symbol_parser, parse_kw = build_parser_for_ingestion_args(self.args)
+            full_symbol_parser.parse(**parse_kw)
 
             # 3.2. We build the mini symbol parser by extracting the sufficient subset of symbols from the full symbol parser.
             # The sufficient subset includes the seed symbols (directly defined by the dirty files) 
@@ -245,6 +245,7 @@ def main():
 
     # Add argument groups from the centralized module
     input_params.add_core_input_args(parser)
+    input_params.add_cross_machine_path_args(parser)
     input_params.add_git_update_args(parser)
     input_params.add_worker_args(parser)
     input_params.add_batching_args(parser)

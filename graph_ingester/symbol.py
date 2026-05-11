@@ -15,7 +15,7 @@ import gc
 from tqdm import tqdm
 
 import input_params
-from symbol_parser import SymbolParser, Symbol
+from symbol_parser import SymbolParser, build_parser_for_ingestion_args, Symbol
 from source_parser import CompilationManager
 from utils import align_string
 
@@ -577,6 +577,7 @@ def main():
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     parser = argparse.ArgumentParser(description='Import Clangd index symbols and file structure into Neo4j.')
     input_params.add_core_input_args(parser)
+    input_params.add_cross_machine_path_args(parser)
     input_params.add_worker_args(parser)
     input_params.add_batching_args(parser)
     input_params.add_ingestion_strategy_args(parser)
@@ -594,12 +595,18 @@ def main():
         args.ingest_batch_size = args.cypher_tx_size * (args.num_parse_workers or default_workers)
 
     logger.info("\n--- Starting Phase 0: Loading, Parsing, and Linking Symbols ---")
-    symbol_parser = SymbolParser(index_file_path=args.index_file, log_batch_size=args.log_batch_size)
-    symbol_parser.parse(num_workers=args.num_parse_workers)
+    symbol_parser, parse_kw = build_parser_for_ingestion_args(args)
+    symbol_parser.parse(**parse_kw)
     logger.info("--- Finished Phase 0 ---")
 
     logger.info("\n--- Starting Phase 1: Parsing Source Code for Spans ---")
-    compilation_manager = CompilationManager(project_path=args.project_path, compile_commands_path=args.compile_commands)
+    from index_path_remap import compilation_remap_kwargs_from_args
+
+    compilation_manager = CompilationManager(
+        project_path=args.project_path,
+        compile_commands_path=args.compile_commands,
+        **compilation_remap_kwargs_from_args(args),
+    )
     compilation_manager.parse_folder(args.project_path, args.num_parse_workers)
     logger.info("--- Finished Phase 1 ---")
 

@@ -45,6 +45,7 @@ def main() -> int:
         description="Export clangd + Clang-derived code graph to JSON or YAML (no Neo4j)."
     )
     input_params.add_core_input_args(parser)
+    input_params.add_cross_machine_path_args(parser)
     input_params.add_worker_args(parser)
     input_params.add_batching_args(parser)
     input_params.add_source_parser_args(parser)
@@ -103,6 +104,8 @@ def main() -> int:
         num_parse_workers=args.num_parse_workers,
         log_batch_size=args.log_batch_size,
         ingest_batch_size=args.ingest_batch_size,
+        index_source_root=getattr(args, "index_source_root", None),
+        local_source_root=getattr(args, "local_source_root", None),
     )
     out = str(args.output.resolve())
     fmt = args.format

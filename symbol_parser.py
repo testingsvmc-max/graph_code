@@ -8,7 +8,7 @@ in-memory collection of symbol objects.
 """
 
 import yaml, pickle
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Callable
 from dataclasses import dataclass
 import logging, os
 import gc
@@ -51,9 +51,12 @@ class Location:
     end_column: int
     
     @classmethod
-    def from_dict(cls, data: dict) -> 'Location':
+    def from_dict(cls, data: dict, uri_remap: Optional[Callable[[str], str]] = None) -> 'Location':
+        uri = data['FileURI']
+        if uri_remap:
+            uri = uri_remap(uri)
         return cls(
-            file_uri=data['FileURI'],
+            file_uri=uri,
             start_line=data['Start']['Line'],
             start_column=data['Start']['Column'],
             end_line=data['End']['Line'],
@@ -93,10 +96,10 @@ class Reference:
     container_id: Optional[str] = None
     
     @classmethod
-    def from_dict(cls, data: dict) -> 'Reference':
+    def from_dict(cls, data: dict, uri_remap: Optional[Callable[[str], str]] = None) -> 'Reference':
         return cls(
             kind=data['Kind'],
-            location=Location.from_dict(data['Location']),
+            location=Location.from_dict(data['Location'], uri_remap=uri_remap),
             container_id=data.get('Container', {}).get('ID')
         )
 
@@ -173,10 +176,17 @@ class CallRelation:
 
 class SymbolParser:
     """A high-performance parser for clangd index YAML files with built-in caching."""
-    def __init__(self, index_file_path: str, log_batch_size: int = 1000, debugger: Optional[Debugger] = None):
+    def __init__(
+        self,
+        index_file_path: str,
+        log_batch_size: int = 1000,
+        debugger: Optional[Debugger] = None,
+        file_uri_remap: Optional[Callable[[str], str]] = None,
+    ):
         self.index_file_path = index_file_path
         self.log_batch_size = log_batch_size
         self.debugger = debugger
+        self.file_uri_remap = file_uri_remap
         
         # These fields will be populated by parsing or loading from cache
         self.symbols: Dict[str, Symbol] = {}
@@ -190,11 +200,32 @@ class SymbolParser:
         self.unlinked_refs: List[Dict] = []
         self.unlinked_relations: List[Dict] = []
 
-    def parse(self, num_workers: int = 1):
+    def parse(
+        self,
+        num_workers: int = 1,
+        *,
+        remap_index_root: Optional[str] = None,
+        remap_local_root: Optional[str] = None,
+    ):
         """
         Main entry point for parsing. Handles cache loading/saving.
+
+        When using a path remapper in parallel workers, pass ``remap_index_root`` and
+        ``remap_local_root`` so the cache file name stays stable across processes.
         """
+        self._remap_index_root = remap_index_root or ""
+        self._remap_local_root = remap_local_root or ""
         cache_path = os.path.splitext(self.index_file_path)[0] + ".pkl"
+        if self.file_uri_remap is not None:
+            from index_path_remap import remap_cache_suffix
+
+            cache_path = (
+                os.path.splitext(self.index_file_path)[0]
+                + remap_cache_suffix(
+                    self._remap_index_root if self._remap_index_root else ".",
+                    self._remap_local_root if self._remap_local_root else ".",
+                )
+            )
 
         # Determine if we should load from cache
         if self.index_file_path.endswith('.pkl'):
@@ -294,7 +325,7 @@ class SymbolParser:
             
             for ref_data in ref_doc['References']:
                 if 'Location' in ref_data and 'Kind' in ref_data:
-                    reference = Reference.from_dict(ref_data)
+                    reference = Reference.from_dict(ref_data, uri_remap=self.file_uri_remap)
                     self.symbols[symbol_id].references.append(reference)
 
                     if not self.has_container_field and reference.container_id:
@@ -330,8 +361,8 @@ class SymbolParser:
             id=doc['ID'],
             name=doc['Name'],
             kind=sym_info.get('Kind', ''),
-            declaration=Location.from_dict(doc['CanonicalDeclaration']) if 'CanonicalDeclaration' in doc else None,
-            definition=Location.from_dict(doc['Definition']) if 'Definition' in doc else None,
+            declaration=Location.from_dict(doc['CanonicalDeclaration'], uri_remap=self.file_uri_remap) if 'CanonicalDeclaration' in doc else None,
+            definition=Location.from_dict(doc['Definition'], uri_remap=self.file_uri_remap) if 'Definition' in doc else None,
             references=[],
             scope=doc.get('Scope', ''),
             language=sym_info.get('Lang', ''),
@@ -402,7 +433,11 @@ class SymbolParser:
             max_workers=num_workers,
             mp_context=ctx, 
             initializer=_yaml_worker_initializer,
-            initargs=(self.log_batch_size,)
+            initargs=(
+                self.log_batch_size,
+                self._remap_index_root if self._remap_index_root else None,
+                self._remap_local_root if self._remap_local_root else None,
+            ),
         ) as executor:
 
             # Prime the worker queue
@@ -438,6 +473,48 @@ class SymbolParser:
                         except Exception as e:
                             logger.error(f"YAML worker failed: {e}", exc_info=True)
 
+
+def build_parser_for_ingestion_args(args, debugger: Optional[Debugger] = None):
+    """
+    Build a ``SymbolParser`` plus ``parse()`` kwargs from CLI ``args``.
+
+    Expects ``args`` to provide ``index_file``, ``project_path``, ``log_batch_size``,
+    ``num_parse_workers``, and optionally ``index_source_root`` / ``local_source_root``
+    (see ``input_params.add_cross_machine_path_args``).
+    """
+    from pathlib import Path
+
+    from index_path_remap import parse_optional_remap_args
+
+    project_path = Path(args.project_path)
+    idx = getattr(args, "index_source_root", None)
+    loc = getattr(args, "local_source_root", None)
+    idx_s = str(idx).strip() if idx is not None and str(idx).strip() else None
+    loc_s = str(loc).strip() if loc is not None and str(loc).strip() else None
+    remap = parse_optional_remap_args(idx_s, loc_s, project_path)
+    rid, rloc = "", ""
+    if idx_s is not None:
+        rloc = str(
+            Path(loc_s).expanduser().resolve()
+            if loc_s
+            else project_path.expanduser().resolve()
+        )
+        rid = idx_s
+    index_path = args.index_file if isinstance(args.index_file, str) else str(Path(args.index_file).resolve())
+    parser = SymbolParser(
+        index_path,
+        log_batch_size=args.log_batch_size,
+        debugger=debugger,
+        file_uri_remap=remap,
+    )
+    parse_kw = {
+        "num_workers": args.num_parse_workers,
+        "remap_index_root": rid,
+        "remap_local_root": rloc,
+    }
+    return parser, parse_kw
+
+
 # ============================================================
 # Global worker parser, initializer and worker function
 # ============================================================
@@ -458,6 +535,15 @@ def _yaml_worker_process(batch):
             _worker_parser.unlinked_refs,
             _worker_parser.unlinked_relations)
 
-def _yaml_worker_initializer(log_batch_size):
+def _yaml_worker_initializer(
+    log_batch_size,
+    remap_index_root: Optional[str] = None,
+    remap_local_root: Optional[str] = None,
+):
     global _worker_parser
-    _worker_parser = SymbolParser("", log_batch_size)
+    from index_path_remap import make_index_root_to_local_uri_remapper
+
+    remap = None
+    if remap_index_root and remap_local_root:
+        remap = make_index_root_to_local_uri_remapper(remap_index_root, remap_local_root)
+    _worker_parser = SymbolParser("", log_batch_size, file_uri_remap=remap)

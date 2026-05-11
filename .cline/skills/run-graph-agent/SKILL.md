@@ -1,51 +1,55 @@
 ---
 name: run-graph-agent
-description: Run Google ADK coding agents against the code graph — either Neo4j via graph_mcp_server.py or YAML export via export_graph_agent (no Neo4j/MCP). Use when the user asks to run the AI agent, ADK agent, rag_adk_agent, adk web, or natural-language graph chat.
+description: >-
+  Run Google ADK coding agents against the exported code graph (YAML/JSON) — no Neo4j, no graph_mcp_server
+  in the default path. Use when the user asks to run the AI agent, ADK agent, rag_adk_agent, adk web,
+  or natural-language chat on code_graph.yaml.
 ---
 
 # run-graph-agent
 
-This repo has **two** ADK agents in `rag_adk_agent/`. Pick **one** path; do not start both unless the user asks. Details: [rag_adk_agent/README.md](../../../rag_adk_agent/README.md).
+**Default: Path A only** — `code_graph.yaml` / `.json` + **export_graph_agent** (function tools). No Neo4j, no `graph_mcp_server.py`.
+
+This repo has **two** ADK entrypoints in `rag_adk_agent/`. Prefer **Path A** unless the user **explicitly** already uses Neo4j. Details: [rag_adk_agent/README.md](../../../rag_adk_agent/README.md).
 
 ## Trigger examples
 
-- "run the graph agent / ADK agent"
-- "`adk web` / `adk run` for this project"
-- "chat with the codebase using the agent"
-- "agent without Neo4j" / "YAML-only agent"
+- "run the graph agent / ADK agent on the export"
+- "`adk web` / `adk run` for export_graph_agent"
+- "chat with the codebase using the YAML graph"
 
 ## Prerequisites
 
-- Python deps include **google-adk** and **litellm** (see `requirements-core.txt`).
-- **LLM API key** for the chosen model (default LiteLLM model is `deepseek/deepseek-chat` → e.g. `DEEPSEEK_API_KEY`). Override with `LLM_MODEL` if needed.
-- Repo root as working directory for paths below.
+- Python deps: **google-adk**, **litellm** (`requirements-core.txt`).
+- **LLM API key** (default LiteLLM model `deepseek/deepseek-chat` → e.g. `DEEPSEEK_API_KEY`). Override with `LLM_MODEL` if needed.
+- Repo root as working directory.
 
 ---
 
-## Path A — Export graph agent (no Neo4j, no MCP)
+## Path A — Export graph agent (default)
 
-Use when the user already has **`<project>/.clangd-graph-rag/code_graph.yaml`** (or `.json`) from **build-graph-code**.
+Use when **`<project>/.clangd-graph-rag/code_graph.yaml`** (or `.json`) exists (**build-graph-code**).
 
 ### Environment
 
-- **`CODE_GRAPH_YAML`** or **`GRAPH_PATH`**: absolute or repo-relative path to the export file.
-- **`DEEPSEEK_API_KEY`** (or keys for whatever `LLM_MODEL` uses).
+- **`CODE_GRAPH_YAML`** or **`GRAPH_PATH`**: path to the export file.
+- **`DEEPSEEK_API_KEY`** (or keys for your `LLM_MODEL`).
 
 ### Commands (repo root)
 
-One-shot question:
+One-shot:
 
 ```bash
-python rag_adk_agent/run_export_graph_agent.py --graph <project>/.clangd-graph-rag/code_graph.yaml --query "Your question in natural language"
+python rag_adk_agent/run_export_graph_agent.py --graph <project>/.clangd-graph-rag/code_graph.yaml --query "Your question"
 ```
 
-Interactive REPL (no `--query`):
+Interactive REPL (omit `--query`):
 
 ```bash
 python rag_adk_agent/run_export_graph_agent.py --graph <project>/.clangd-graph-rag/code_graph.yaml
 ```
 
-**ADK UI / standard runner** (set `CODE_GRAPH_YAML` first, then from repo root):
+**ADK UI:**
 
 ```bash
 adk run rag_adk_agent.export_graph_agent
@@ -55,77 +59,56 @@ adk run rag_adk_agent.export_graph_agent
 adk web
 ```
 
-In the web UI, select the app that loads **`rag_adk_agent.export_graph_agent`** / **Export_Graph_Agent** if multiple apps appear.
+Pick **Export_Graph_Agent** / `rag_adk_agent.export_graph_agent` in the UI.
 
 ### Behaviour
 
-The agent uses **function tools** only: `list_export_graph_tools()` and `invoke_export_graph_tool(tool_name, arguments_json)`. No `graph_mcp_server.py`, no Neo4j.
+Tools: `list_export_graph_tools()`, `invoke_export_graph_tool(...)`. **No** Neo4j, **no** `graph_mcp_server.py`.
 
 ---
 
-## Path B — Neo4j + MCP agent (full GraphRAG)
+## Path B — Neo4j + MCP (only if user already uses Neo4j)
 
-Use when Neo4j is populated and the user wants **Cypher**, `get_source_code_by_id`, semantic search on summaries, etc.
+**Do not** install or start Neo4j when the user wants a no-Neo4j workflow. Use Path B only if they already run Neo4j and ask for Cypher / `graph_mcp_server` tools.
 
-### Step 1 — MCP tool server (terminal 1, repo root)
+### Terminal 1
 
 ```bash
 python graph_mcp_server.py
 ```
 
-Requires **`NEO4J_URI`**, **`NEO4J_USER`**, **`NEO4J_PASSWORD`** (and a reachable DB). Default MCP URL is **`http://127.0.0.1:8800/mcp`** (see `rag_adk_agent/agent.py` if you need to align ports).
+Needs **`NEO4J_URI`**, **`NEO4J_USER`**, **`NEO4J_PASSWORD`**. Default MCP URL **`http://127.0.0.1:8800/mcp`** (see `rag_adk_agent/agent.py`).
 
-### Step 2 — Agent (terminal 2, repo root)
+### Terminal 2
 
 ```bash
 adk run rag_adk_agent
 ```
 
-or:
-
-```bash
-adk web
-```
-
-Select **`rag_adk_agent`** in the UI, or use the custom runner:
-
-```bash
-python rag_adk_agent/run_agent.py
-```
-
-### Behaviour
-
-Tools come from **`MCPToolset`** → **`graph_mcp_server.py`**. The agent instruction assumes Neo4j labels and Cypher.
+or `adk web` → select **`rag_adk_agent`** (not export_graph_agent).
 
 ---
 
-## Windows (PowerShell) quick env
+## Windows (PowerShell) — Path A
 
 ```powershell
 $env:CODE_GRAPH_YAML = "D:\path\to\project\.clangd-graph-rag\code_graph.yaml"
 $env:DEEPSEEK_API_KEY = "<key>"
-python rag_adk_agent/run_export_graph_agent.py --graph $env:CODE_GRAPH_YAML --query "List stats and suggest callers query for main"
-```
-
-Neo4j path:
-
-```powershell
-$env:NEO4J_URI = "bolt://localhost:7687"
-$env:NEO4J_USER = "neo4j"
-$env:NEO4J_PASSWORD = "<password>"
-python graph_mcp_server.py
+python rag_adk_agent/run_export_graph_agent.py --graph $env:CODE_GRAPH_YAML --query "List stats and suggest a callers query for main"
 ```
 
 ---
 
 ## If something fails
 
-- **Export agent**: "Graph export not found" → run **build-graph-code** or set `--graph` / `CODE_GRAPH_YAML` correctly.
-- **401/403 from LLM** → check API key and `LLM_MODEL` for LiteLLM.
-- **Neo4j agent**: connection errors → Neo4j not running or wrong env; MCP must be up **before** `adk run`.
+- **Export agent**: graph file missing → **build-graph-code** or fix `--graph` / `CODE_GRAPH_YAML`.
+- **401/403 LLM** → API key / `LLM_MODEL`.
+- **Path B only**: Neo4j / MCP connection → DB running and env vars set before `adk run`.
 
 ## Related skills
 
-- **build-graph-code** — produce `code_graph.yaml` / `graph.db` for Path A.
-- **clangd-graph-setup** — first-time install and `compile_commands` wiring.
-- **query-graph-code** — deterministic HTTP/CLI query without running the LLM agent.
+- **build-graph-code** — create `code_graph.yaml` / `graph.db`.
+- **clangd-graph-setup** — install and `compile_commands` wiring.
+- **search-graph-export** — direct CLI on `code_graph.yaml` (`query_code_graph.py`, `code_graph_tools.py`); optional HTTP **8090** / MCP **8810** without the LLM agent.
+- **search-graph-db** / **search-graph-semantic** — SQLite or vector query paths.
+- **query-graph-code** — router across search skills.

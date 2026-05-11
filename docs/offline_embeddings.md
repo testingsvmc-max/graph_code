@@ -17,6 +17,13 @@ Local embeddings use **`llm_client.get_embedding_client()`** → one process-wid
 
 Design notes: [graph_to_vector_rag.md](./graph_to_vector_rag.md).
 
+## Repo-local downloads (`embedding_models/`)
+
+The repository includes an **`embedding_models/`** tree (see [`embedding_models/README.md`](../embedding_models/README.md)) for weights **next to the clone** instead of only `~/.cache/huggingface`.
+
+- **Script:** `python standalone_tools/download_embedding_model.py` (default model → `embedding_models/sentence-transformers/all-MiniLM-L6-v2/`).
+- **Use offline:** set `SENTENCE_TRANSFORMER_MODEL` to the **absolute path** of that directory (or set `HF_HOME` to `embedding_models/huggingface_cache` before downloading — details in the README).
+
 ## Configuration
 
 | Variable | Purpose | Default |

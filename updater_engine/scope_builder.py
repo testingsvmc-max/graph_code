@@ -15,6 +15,7 @@ from tqdm import tqdm
 # Lower-level data structures and utilities
 from symbol_parser import SymbolParser, Symbol
 from source_parser import CompilationManager
+from index_path_remap import compilation_remap_kwargs_from_args
 from neo4j_manager import Neo4jManager
 
 # Ingestion components
@@ -76,7 +77,8 @@ class GraphUpdateScopeBuilder:
         # 1. Initialize CompilationManager
         self.comp_manager = CompilationManager(
             project_path=self.project_path,
-            compile_commands_path=self.args.compile_commands
+            compile_commands_path=self.args.compile_commands,
+            **compilation_remap_kwargs_from_args(self.args),
         )
 
         # 1.5 Determine parsing strategy based on Clangd index capabilities

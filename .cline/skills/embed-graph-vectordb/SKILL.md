@@ -1,11 +1,14 @@
 ---
 name: embed-graph-vectordb
-description: Embed clangd-graph-rag code_graph.yaml into a local vector store (JSONL with vectors, Chroma, or FAISS) using offline SentenceTransformer; full index by default (omit --max-nodes). Use when the user asks to embed the graph for RAG, vector DB, semantic search, FAISS, Chroma, or export embeddings from the code graph.
+description: >-
+  Build and query vector stores from code_graph.yaml: JSONL chunks with embeddings, Chroma, or FAISS
+  (semantic search via faiss query). Use when the user asks to embed the graph, vector DB, embed DB,
+  semantic / cosine search, FAISS, Chroma, or RAG chunks.
 ---
 
 # embed-graph-vectordb
 
-Turn **`code_graph.yaml`** (or `.json`) into **searchable vectors** for RAG. **No Neo4j required.** Uses local **`SentenceTransformer`** via `llm_client` (same model as optional Neo4j summaries).
+Turn **`code_graph.yaml`** (or `.json`) into **searchable vectors** for RAG. **Offline only** — local **`SentenceTransformer`** via `llm_client` (pick one model and keep it at build and query time).
 
 **Prerequisite:** a graph export exists (see **build-graph-code**), typically:
 
@@ -13,7 +16,7 @@ Turn **`code_graph.yaml`** (or `.json`) into **searchable vectors** for RAG. **N
 <project>/.clangd-graph-rag/code_graph.yaml
 ```
 
-Reference docs: [docs/offline_embeddings.md](../../../docs/offline_embeddings.md), [docs/graph_to_vector_rag.md](../../../docs/graph_to_vector_rag.md).
+Reference docs: [docs/offline_embeddings.md](../../../docs/offline_embeddings.md), [docs/graph_to_vector_rag.md](../../../docs/graph_to_vector_rag.md). **Offline model directory:** [embedding_models/README.md](../../../embedding_models/README.md) and `python standalone_tools/download_embedding_model.py`.
 
 ## Trigger examples
 
@@ -99,6 +102,23 @@ python standalone_tools/faiss_code_graph_index.py build --chunks ./rag_export/ch
 
 Each JSONL line **must** contain an `embedding` array.
 
+## Query / retrieve (vector DB)
+
+After you have a **FAISS** index directory (`vectors.faiss`, `ids.json`, `metadata.json`, `manifest.json`):
+
+```bash
+python standalone_tools/faiss_code_graph_index.py query --index-dir ./rag_faiss --text "where is auth handled" -k 10 --json
+python standalone_tools/faiss_code_graph_index.py query --index-dir ./rag_faiss --text "init" -k 5 --labels FUNCTION,METHOD
+```
+
+Use the **same** `SENTENCE_TRANSFORMER_MODEL` (and device) as when you ran **build**; otherwise dimensions will not match.
+
+**JSONL with embeddings:** each line is a record (`id`, `text`, `metadata`, `embedding`). Load with your app, `jq`, or a small Python loop. To turn into FAISS without re-encoding: `faiss_code_graph_index.py build --chunks ./rag_export/chunks.jsonl --out-dir ./rag_faiss`.
+
+**Chroma:** `export_graph_rag_chunks.py --backend chroma --out-dir ./rag_chroma` creates a persistent store under that directory. Query with the `chromadb` Python API (collection name / client path match your export); see [docs/graph_to_vector_rag.md](../../../docs/graph_to_vector_rag.md).
+
+For **callers / callees / graph traverse** on symbols, use **search-graph-export** (`code_graph.yaml`) or **search-graph-db** (`graph.db`) — structural, not vector cosine.
+
 ## Defaults and tuning
 
 - **Labels included** (unless `--include-label` is repeated): FUNCTION, METHOD, FILE, FOLDER, CLASS_STRUCTURE, DATA_STRUCTURE, MACRO, TYPE_ALIAS, NAMESPACE (see `export_graph_rag_chunks.py`).
@@ -114,5 +134,7 @@ Each JSONL line **must** contain an `embedding` array.
 ## Related skills
 
 - **build-graph-code** — produce `code_graph.yaml` first.
-- **query-graph-code** — structural / lexical query without vectors.
+- **search-graph-semantic** — query FAISS / Chroma / JSONL vectors (this skill focuses on build + tuning).
+- **search-graph-export** / **search-graph-db** — structural graph search (YAML vs SQLite).
+- **query-graph-code** — router if unsure which search skill applies.
 - **run-graph-agent** — ADK agent on YAML (lexical tools unless you wire a vector retriever yourself).

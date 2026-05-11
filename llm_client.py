@@ -356,6 +356,7 @@ def setup_llm_client(args, project_path: str) -> LlmClient:
 #
 # Environment:
 #   SENTENCE_TRANSFORMER_MODEL — HuggingFace id or local path (default: all-MiniLM-L6-v2 → 384 dims).
+#     Repo-local offline folder: embedding_models/ + standalone_tools/download_embedding_model.py (see embedding_models/README.md).
 #   EMBEDDING_DIMENSION (alias: NEO4J_VECTOR_DIMENSION) — declare vector width for indexes/manifests; must match the model (default 384).
 #
 # One SentenceTransformer per process (singleton) to avoid loading the model multiple times.

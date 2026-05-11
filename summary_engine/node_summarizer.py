@@ -7,7 +7,7 @@ worker for generating RAG summaries.
 import os
 import logging
 import hashlib
-import tiktoken
+import tiktoken_compat as tiktoken
 import re
 from typing import Optional, Dict, Any, Tuple, List
 

@@ -48,7 +48,13 @@ _configure_libclang_from_env()
 class CompilationManager:
     """Manages parsing, caching, and parallel execution logic."""
 
-    def __init__(self, project_path: str = '.', compile_commands_path: Optional[str] = None):
+    def __init__(
+        self,
+        project_path: str = ".",
+        compile_commands_path: Optional[str] = None,
+        compile_commands_remap_from: Optional[str] = None,
+        compile_commands_remap_to: Optional[str] = None,
+    ):
         self.project_path = os.path.abspath(project_path)
         self.repo = get_git_repo(self.project_path)
         
@@ -72,6 +78,17 @@ class CompilationManager:
             if not os.path.exists(inferred):
                 raise ValueError("compile_commands.json not found. Use --compile-commands to specify.")
             self.compile_commands_path = inferred
+
+        if compile_commands_remap_from and str(compile_commands_remap_from).strip():
+            from index_path_remap import materialize_remapped_compile_commands
+
+            to = compile_commands_remap_to or self.project_path
+            _td, jp = materialize_remapped_compile_commands(
+                self.compile_commands_path,
+                str(compile_commands_remap_from).strip().strip('"'),
+                Path(to).expanduser().resolve(),
+            )
+            self.compile_commands_path = jp
 
         # Late-initialized components
         self._orchestrator = ParallelOrchestrator()
