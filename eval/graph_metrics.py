@@ -6,14 +6,14 @@ deterministic checks on YAML/JSON exports and SQLite ``graph.db`` (graph-reviewâ
 
 Public API:
   - ``compute_metrics_from_export(graph: dict) -> dict``
-  - ``compute_metrics_from_sqlite(db_path: str | Path) -> dict``
+  - ``compute_metrics_from_sqlite(db_path: Union[str, Path]) -> dict``
 """
 
 from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple, Union
 
 
 def _norm_fp(v: Any) -> str:
@@ -141,7 +141,7 @@ def compute_metrics_from_export(graph: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def compute_metrics_from_sqlite(db_path: str | Path) -> Dict[str, Any]:
+def compute_metrics_from_sqlite(db_path: Union[str, Path]) -> Dict[str, Any]:
     """Same high-level metrics using SQLite ``nodes`` / ``edges`` tables."""
     db = Path(db_path).expanduser().resolve()
     conn = sqlite3.connect(str(db))

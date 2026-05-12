@@ -48,6 +48,8 @@ Lines with `id`, `text`, `metadata`, optional **`embedding`** array: load in you
 ## Related skills
 
 - **embed-graph-vectordb** — create chunks, Chroma store, FAISS index, JSONL with `--with-embeddings`.
+- **graph-traverse-chroma** — after structural traverse, fetch or query Chroma only within neighborhood node ids.
+- **chroma-query-graph-traverse** — Chroma `query` for NL seeds, then merged CALLS subgraph from YAML.
 - **search-graph-export** — structural YAML graph.
 - **search-graph-db** — structural SQLite `graph.db`.
 - **query-graph-code** — router across all three search types.

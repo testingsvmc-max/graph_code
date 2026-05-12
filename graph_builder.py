@@ -221,6 +221,29 @@ def main():
     args.index_file = str(args.index_file.resolve())
     args.project_path = str(args.project_path.resolve())
 
+    cc = getattr(args, "compile_commands", None)
+    if not cc:
+        cand = Path(args.project_path) / "compile_commands.json"
+        if cand.is_file():
+            cc = str(cand)
+    args.compile_commands = cc
+
+    if getattr(args, "infer_index_source_root_from_compile_commands", False):
+        if not cc:
+            logger.error(
+                "--infer-index-source-root-from-compile-commands requires --compile-commands "
+                "or compile_commands.json under project_path."
+            )
+            return 1
+        try:
+            from index_path_remap import apply_infer_index_source_root_flag
+
+            apply_infer_index_source_root_flag(args, cc)
+        except ValueError as exc:
+            logger.error("%s", exc)
+            return 1
+        logger.info("Inferred --index-source-root: %s", args.index_source_root)
+
     # Set default for ingest_batch_size if not provided
     if args.ingest_batch_size is None:
         try:

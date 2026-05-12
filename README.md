@@ -46,6 +46,12 @@ Or to query **graph file**, **SQLite graph.db**, **FAISS / vector DB**, or **Neo
 query graph db, vector db, sqlite, or embeddings
 ```
 
+Or to combine **Chroma** with **call-graph traversal** (known function id, or natural-language seeds):
+
+```text
+Chroma graph neighborhood or chroma seed then traverse
+```
+
 Cline can use project skills under `.cline/skills/` and run:
 
 ```bash
@@ -171,6 +177,16 @@ During setup, the script asks for confirmation whether you want to provide a
    python standalone_tools/crg_db_query.py --db <path/to/project>/.clangd-graph-rag/graph.db callers "<qualified_name>"
    ```
 
+9. Optional **Chroma** vector store + **hybrid** call-graph slice (same graph as step 7):
+
+   ```bash
+   pip install -r requirements-vectordb.txt
+   python standalone_tools/export_graph_rag_chunks.py <path/to/project>/.clangd-graph-rag/code_graph.yaml --backend chroma --out-dir <path/to/project>/.clangd-graph-rag/rag_chroma
+   python standalone_tools/chroma_graph_neighborhood.py <path/to/project>/.clangd-graph-rag/code_graph.yaml --chroma <path/to/project>/.clangd-graph-rag/rag_chroma "<function_node_id>" --depth 2
+   ```
+
+   For natural-language seeds instead of a known id, use **`--chroma-seed-query "…"`** (omit the positional start). Details: [Chroma and graph traversal hybrid](#chroma-and-graph-traversal-hybrid).
+
 API extras (still no MCP):
 - `GET /graph/stats`
 - `GET /nodes/search?q=...`
@@ -180,7 +196,7 @@ API extras (still no MCP):
 
 ### Query reference: graph file, SQLite graph.db, vector DB, embeddings
 
-Use this table to pick the right interface after you have built artifacts (Quick Start steps 3–8 above). Cline skills: **search-graph-export** (YAML/JSON structural), **search-graph-db** (`graph.db` structural), **search-graph-semantic** (vector / semantic query), **query-graph-code** (router), **embed-graph-vectordb** (build chunks + FAISS / Chroma / JSONL).
+Use this table to pick the right interface after you have built artifacts (Quick Start steps 3–9 above). Cline skills: **search-graph-export** (YAML/JSON structural), **search-graph-db** (`graph.db` structural), **search-graph-semantic** (vector / semantic query), **query-graph-code** (router), **embed-graph-vectordb** (build chunks + FAISS / Chroma / JSONL), **graph-traverse-chroma** (known start id + Chroma), **chroma-query-graph-traverse** (Chroma NL seeds + merged graph traverse).
 
 | Store | Artifact | Structural queries (callers, traverse, impact) | Semantic / vector search | Commands |
 |-------|-----------|--------------------------------------------------|----------------------------|----------|
@@ -188,8 +204,19 @@ Use this table to pick the right interface after you have built artifacts (Quick
 | **SQLite graph DB** | `graph.db` | Yes | No | `python standalone_tools/crg_db_query.py --db <graph.db> search \| callers \| callees \| call-graph …`; HTTP: `python -m code_graph_api.crg_db_main <graph.db> --host 127.0.0.1 --port 8091` |
 | **Vector DB (FAISS)** | Directory with `vectors.faiss`, `ids.json`, `metadata.json` | No | Yes (cosine / top‑k) | `python standalone_tools/faiss_code_graph_index.py query --index-dir <dir> --text "…" -k 10 --json` |
 | **Embed chunks (JSONL)** | `chunks.jsonl` (+ optional `embedding` per line) | No | Yes (your loader or FAISS from chunks) | `export_graph_rag_chunks.py --backend jsonl --with-embeddings`; see [docs/graph_to_vector_rag.md](docs/graph_to_vector_rag.md) |
-| **Chroma** | Folder under `--out-dir` from `--backend chroma` | No | Yes (`chromadb` API) | See **embed-graph-vectordb** skill and [docs/offline_embeddings.md](docs/offline_embeddings.md) |
+| **Chroma** | `<out-dir>/chroma_db` from `export_graph_rag_chunks --backend chroma` | **Yes** when paired with the same `code_graph.yaml`: merged **CALLS** slice + `edges` JSON via `chroma_graph_neighborhood.py` | Yes (`chromadb` API or the same script) | **embed-graph-vectordb** (build), **graph-traverse-chroma** / **chroma-query-graph-traverse** (hybrid CLI); [docs/offline_embeddings.md](docs/offline_embeddings.md) |
 | **Neo4j + embeddings on nodes** | Bolt graph | Yes (Cypher, MCP) | Yes (if summaries/embeddings ingested) | Neo4j Browser; `python -m neo4j_manager search …`; `graph_mcp_server.py` — see [End-to-end](#end-to-end-build-the-graph-from-scratch) and [Interacting with the Graph](#interacting-with-the-graph-ai-agent) |
+
+#### Chroma and graph traversal hybrid
+
+After you have **`code_graph.yaml`** and a **Chroma** export from the same graph (`pip install -r requirements-vectordb.txt` then `export_graph_rag_chunks --backend chroma`), use **`standalone_tools/chroma_graph_neighborhood.py`** for JSON that includes **`nodes`** (graph node + Chroma document per id) and **`edges`** (structural slice, e.g. `CALLS`).
+
+| Mode | When to use | Example |
+|------|----------------|--------|
+| **Known start id** | You already have a function / node id (or a unique substring resolved like `query_code_graph.py traverse`) | `python standalone_tools/chroma_graph_neighborhood.py <project>/.clangd-graph-rag/code_graph.yaml --chroma <project>/.clangd-graph-rag/rag_chroma "<func_node_id>" --depth 2 --direction both` |
+| **Chroma NL seeds** | You only have a natural-language idea of what to inspect; Chroma picks seeds, then the YAML graph is traversed and merged | `python standalone_tools/chroma_graph_neighborhood.py <project>/.clangd-graph-rag/code_graph.yaml --chroma <project>/.clangd-graph-rag/rag_chroma --chroma-seed-query "parse EAPOL frames" --seed-k 5 --depth 2` |
+
+Optional **`--semantic "…"`** runs a second Chroma `query` **restricted** to the neighborhood node ids (top **`--k`**). Tunables for seed mode: **`--seed-labels`**, **`--merge-cap`**, **`--seed-fetch`** (see `.cline/skills/chroma-query-graph-traverse/SKILL.md`).
 
 ---
 
@@ -206,6 +233,7 @@ When building a code graph for the Linux kernel (WSL2 release) on a workstation 
 ## Table of Contents
 - [Quick Start (No Neo4j)](#quick-start-no-neo4j)
 - [Query reference (graph file, SQLite, vectors, embeddings)](#query-reference-graph-file-sqlite-graphdb-vector-db-embeddings)
+- [Chroma and graph traversal hybrid](#chroma-and-graph-traversal-hybrid)
 - [Why This Project?](#why-this-project)
 - [Why Clang instead of Tree-sitter?](#why-clang-instead-of-tree-sitter)
 - [Key Features & Design Principles](#key-features--design-principles)
@@ -571,6 +599,10 @@ These scripts are the core components of the pipeline and can also be run standa
 *   **`python standalone_tools/export_graph_rag_chunks.py`**:
     *   **Purpose**: Export `code_graph.yaml` / JSON to **RAG chunks** for an external vector DB: **`--backend jsonl`** (portable lines: `id`, `text`, `metadata`, optional `--with-embeddings`) or **`--backend chroma`** (persistent Chroma; requires `pip install -r requirements-vectordb.txt`). Uses the same local **SentenceTransformer** settings as Neo4j embedding (`SENTENCE_TRANSFORMER_MODEL`, default 384-dim `all-MiniLM-L6-v2`). Offline embedding env + troubleshooting: [docs/offline_embeddings.md](docs/offline_embeddings.md); design: [docs/graph_to_vector_rag.md](docs/graph_to_vector_rag.md).
     *   **Usage**: `python standalone_tools/export_graph_rag_chunks.py path/to/code_graph.yaml --backend jsonl` → writes `rag_export/chunks.jsonl` + `manifest.json` next to the graph file by default. **`--max-nodes` is optional** — omit it to export/embed **every** matching node; pass `N` only to cap for quick tests.
+
+*   **`python standalone_tools/chroma_graph_neighborhood.py`**:
+    *   **Purpose**: Join **structural** `code_graph.yaml` traversal with **Chroma** rows (document id = graph node id). Prints JSON with **`edges`**, **`nodes`** (each with `graph` + optional `chroma`), and optional **`semantic`** rerank inside the id set.
+    *   **Modes**: (1) positional **`start`** node id — same resolution rules as `query_code_graph.py traverse`; (2) **`--chroma-seed-query`** — global Chroma query, then merged neighborhoods from multiple seeds. See [Chroma and graph traversal hybrid](#chroma-and-graph-traversal-hybrid) and Cline skills **graph-traverse-chroma** / **chroma-query-graph-traverse**.
 
 *   **`python standalone_tools/faiss_code_graph_index.py`**:
     *   **Purpose**: Build a **FAISS** `IndexFlatIP` index (cosine via L2-normalized vectors) from **`--graph`** or pre-embedded **`--chunks`** JSONL; **`query`** subcommand runs semantic top‑`k` search + optional `--labels` filter. Requires `pip install -r requirements-faiss.txt`.

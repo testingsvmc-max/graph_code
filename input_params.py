@@ -26,8 +26,9 @@ def add_cross_machine_path_args(parser: argparse.ArgumentParser):
         default=None,
         metavar="DIR",
         help=(
-            "POSIX root as on the indexer machine (e.g. /home/dpi/build_server/android/repo). "
-            "Use a plain string — do not rely on Windows resolving /home/... paths."
+            "POSIX root as on the indexer machine, exactly as it appears in YAML FileURI and "
+            "compile_commands paths (e.g. /home/dpi/qb5_8815/workspace/P4_1716/android). "
+            "Use a quoted plain string on Windows — do not use Path.resolve() on Linux paths."
         ),
     )
     group.add_argument(
@@ -35,7 +36,19 @@ def add_cross_machine_path_args(parser: argparse.ArgumentParser):
         type=str,
         default=None,
         metavar="DIR",
-        help="The same logical root on this machine. Defaults to project_path when --index-source-root is set.",
+        help=(
+            "Checkout root on this machine with the same relative tree as --index-source-root "
+            "(default: project_path). Example: D:\\1716_code when the Linux tree was .../android/...."
+        ),
+    )
+    group.add_argument(
+        "--infer-index-source-root-from-compile-commands",
+        action="store_true",
+        help=(
+            "Set --index-source-root automatically from POSIX paths in compile_commands.json "
+            "(longest common prefix of directory + file fields). Use with a Windows project_path; "
+            "omit --index-source-root when using this flag."
+        ),
     )
 
 def add_worker_args(parser: argparse.ArgumentParser):

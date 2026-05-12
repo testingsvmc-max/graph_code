@@ -9,6 +9,8 @@ cross-file call arcs cannot appear.
 
   python standalone_tools/crg_visualize_full_d3.py --db path/to/graph.db -o graph_d3.html
 
+Prefer ``export_code_graph_d3_html.py`` from ``code_graph.yaml`` / ``.json`` when ``code_review_graph`` is not installed (built-in D3 in this repo).
+
 Requires the optional upstream visualize helpers (``GraphStore``, ``generate_html``);
 see README for install notes.
 """

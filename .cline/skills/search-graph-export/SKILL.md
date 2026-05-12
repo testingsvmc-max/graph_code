@@ -88,6 +88,8 @@ POST /graph/impact-radius  body: {"changed_files":["src/a.c","include/a.h"]}
 
 - **search-graph-db** — query **`graph.db`** (prefer **`crg_db_query.py`**; HTTP **8091** optional).
 - **search-graph-semantic** — FAISS / Chroma / JSONL **vector** query.
+- **graph-traverse-chroma** — known id → traverse → Chroma `get` / filtered `query`.
+- **chroma-query-graph-traverse** — Chroma NL `query` → merged traverse subgraph + edges JSON.
 - **query-graph-code** — router if unsure which artifact you have.
 - **embed-graph-vectordb** — build vector indexes from this YAML.
 - **run-graph-agent** — ADK agent over the same export file.

@@ -38,17 +38,17 @@ Optional env for embeddings: `SENTENCE_TRANSFORMER_MODEL` (default `all-MiniLM-L
 
 Runs export + SQLite + FAISS with the same mapping flags. **`--skip-neo4j`** ensures Neo4j is never invoked.
 
-Replace placeholders: `INDEX.yaml`, `D:\src\myrepo`, `compile_commands.json`, and **`/linux/root`** = the absolute directory prefix as it appears inside the Linux YAML / JSON (e.g. `/home/dpi/build_server/android/myproject`).
+**`--index-source-root`** must be the **exact** POSIX prefix that appears in YAML `FileURI` and in `compile_commands` (open one file and copy the common path prefix). The Windows `project_path` (second argument) must contain the **same relative paths** under that prefix — e.g. Linux ``.../android/packages/...`` → ``D:\1716_code\packages\...`` when ``D:\1716_code`` is the mapped root for ``.../android``.
 
 ```powershell
 python standalone_tools/pipeline_linux_index_windows.py `
-  D:\path\to\INDEX.yaml D:\src\myrepo `
-  --compile-commands D:\src\myrepo\compile_commands.json `
-  --index-source-root /home/dpi/build_server/android/myproject `
-  --skip-neo4j --export-yaml --sqlite --faiss-out D:\src\myrepo\.clangd-graph-rag\faiss
+  D:\path\to\INDEX.yaml D:\1716_code `
+  --compile-commands D:\1716_code\compile_commands.json `
+  --index-source-root /home/dpi/qb5_8815/workspace/P4_1716/android `
+  --skip-neo4j --export-yaml --sqlite --faiss-out D:\1716_code\.clangd-graph-rag\faiss
 ```
 
-- **`--export-yaml`**: optional path after the flag; omit the path to use the default `D:\src\myrepo\.clangd-graph-rag\code_graph.yaml`.
+- **`--export-yaml`**: optional path after the flag; omit the path to use the default ``<project_path>\.clangd-graph-rag\code_graph.yaml``.
 - **`--sqlite`**: writes `graph.db` next to the YAML (or use **`--sqlite-out`**).
 - **`--faiss-out`**: directory for the FAISS bundle.
 

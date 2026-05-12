@@ -5,6 +5,8 @@ import unittest
 from index_path_remap import (
     abs_path_to_worker_file_uri,
     file_uri_to_abs_path,
+    infer_index_source_root_from_compile_commands_path,
+    longest_common_posix_path_prefix,
     make_index_root_to_local_uri_remapper,
     path_from_file_uri_for_remap,
     remap_compile_commands_entries,
@@ -47,7 +49,71 @@ class TestIndexPathRemap(unittest.TestCase):
 
             shutil.rmtree(base, ignore_errors=True)
 
-    def test_remap_compile_commands_directory(self):
+    def test_remap_compile_commands_no_false_prefix(self):
+        """Do not rewrite /proj/android when the path is /proj/android2/..."""
+        import pathlib
+
+        loc = pathlib.Path(tempfile.mkdtemp())
+        try:
+            entries = [
+                {
+                    "directory": "/home/dpi/qb5_8815/workspace/P4_1716/android2/out",
+                    "file": "/home/dpi/qb5_8815/workspace/P4_1716/android2/src/a.cpp",
+                    "arguments": [
+                        "clang++",
+                        "-I/home/dpi/qb5_8815/workspace/P4_1716/android2/include",
+                    ],
+                }
+            ]
+            root = "/home/dpi/qb5_8815/workspace/P4_1716/android"
+            out = remap_compile_commands_entries(entries, root, loc)
+            d0 = out[0]["directory"].replace("\\", "/")
+            self.assertIn("/home/dpi", d0)
+            self.assertIn("android2", d0)
+            self.assertNotIn(str(loc).replace("\\", "/"), d0)
+        finally:
+            import shutil
+
+            shutil.rmtree(loc, ignore_errors=True)
+
+    def test_longest_common_posix_path_prefix(self):
+        self.assertEqual(
+            longest_common_posix_path_prefix(
+                [
+                    "/home/ci/android/frameworks/native/cmds/foo.cpp",
+                    "/home/ci/android/packages/apps/Bar/baz.cpp",
+                ]
+            ),
+            "/home/ci/android",
+        )
+        self.assertEqual(longest_common_posix_path_prefix(["/home/a/b"]), "/home/a/b")
+
+    def test_infer_index_root_from_compile_commands(self):
+        import json
+        import pathlib
+
+        td = pathlib.Path(tempfile.mkdtemp())
+        try:
+            cc = td / "compile_commands.json"
+            entries = [
+                {
+                    "directory": "/home/ci/android/out/soong/obj",
+                    "file": "/home/ci/android/frameworks/native/cmds/foo.cpp",
+                },
+                {
+                    "directory": "/home/ci/android/out/soong/other",
+                    "file": "/home/ci/android/packages/apps/Bar/baz.cpp",
+                },
+            ]
+            cc.write_text(json.dumps(entries), encoding="utf-8")
+            root = infer_index_source_root_from_compile_commands_path(str(cc))
+            self.assertEqual(root, "/home/ci/android")
+        finally:
+            import shutil
+
+            shutil.rmtree(td, ignore_errors=True)
+
+    def test_remap_compile_commands_android_tree(self):
         import pathlib
 
         loc = pathlib.Path(tempfile.mkdtemp())

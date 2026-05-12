@@ -23,6 +23,7 @@ The repository includes an **`embedding_models/`** tree (see [`embedding_models/
 
 - **Script:** `python standalone_tools/download_embedding_model.py` (default model → `embedding_models/sentence-transformers/all-MiniLM-L6-v2/`).
 - **Use offline:** set `SENTENCE_TRANSFORMER_MODEL` to the **absolute path** of that directory (or set `HF_HOME` to `embedding_models/huggingface_cache` before downloading — details in the README).
+- **Air-gapped:** if that folder exists under the clone and `SENTENCE_TRANSFORMER_MODEL` is **unset**, `llm_client` loads it automatically (no Hugging Face call).
 
 ## Configuration
 

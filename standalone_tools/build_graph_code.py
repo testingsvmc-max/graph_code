@@ -133,6 +133,8 @@ def main() -> int:
         cmd.extend(["--index-source-root", str(args.index_source_root).strip().strip('"')])
     if getattr(args, "local_source_root", None) and str(args.local_source_root).strip():
         cmd.extend(["--local-source-root", str(args.local_source_root).strip().strip('"')])
+    if getattr(args, "infer_index_source_root_from_compile_commands", False):
+        cmd.append("--infer-index-source-root-from-compile-commands")
 
     print("+", " ".join(cmd))
     rc = subprocess.call(cmd)

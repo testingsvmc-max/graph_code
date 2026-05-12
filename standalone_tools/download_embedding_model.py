@@ -34,6 +34,11 @@ def main() -> int:
         action="store_true",
         help="Print paths only; do not download.",
     )
+    p.add_argument(
+        "--revision",
+        default=None,
+        help="Optional Git revision (branch / tag / commit) for reproducible snapshots.",
+    )
     args = p.parse_args()
     dest: Path = args.local_dir.expanduser().resolve()
 
@@ -52,10 +57,20 @@ def main() -> int:
         raise SystemExit(1) from exc
 
     dest.parent.mkdir(parents=True, exist_ok=True)
-    snapshot_download(repo_id=args.repo_id, local_dir=str(dest))
+    # Avoid symlinks so the folder can be zipped/copied to another Windows machine as-is.
+    snapshot_download(
+        repo_id=args.repo_id,
+        local_dir=str(dest),
+        local_dir_use_symlinks=False,
+        resume_download=True,
+        revision=args.revision,
+    )
     print(f"Downloaded {args.repo_id!r} -> {dest}")
     print("Set for this shell (adjust drive/path):")
     print(f'  SENTENCE_TRANSFORMER_MODEL="{dest}"')
+    print()
+    print("Air-gapped / corporate PC: copy this folder into the same path under your clangd-graph-rag")
+    print("clone (or set SENTENCE_TRANSFORMER_MODEL to the copied directory). Offline load needs no HF.")
     return 0
 
 

@@ -14,6 +14,15 @@ Example::
     python standalone_tools/pipeline_linux_index_windows.py ^
       D:\\artifacts\\index.yaml D:\\src\\myrepo ^
       --compile-commands D:\\src\\myrepo\\compile_commands.json ^
+      --infer-index-source-root-from-compile-commands ^
+      --export-yaml --sqlite --faiss-out D:\\src\\myrepo\\.clangd-graph-rag\\faiss_index ^
+      -- --generate-summary
+
+Or pass an explicit Linux root::
+
+    python standalone_tools/pipeline_linux_index_windows.py ^
+      D:\\artifacts\\index.yaml D:\\src\\myrepo ^
+      --compile-commands D:\\src\\myrepo\\compile_commands.json ^
       --index-source-root /home/dpi/build_server/android/myproject ^
       --export-yaml --sqlite --faiss-out D:\\src\\myrepo\\.clangd-graph-rag\\faiss_index ^
       -- --generate-summary
@@ -24,6 +33,7 @@ Arguments after ``--`` are forwarded to ``graph_builder.py`` (Neo4j phase only).
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -54,12 +64,18 @@ def main() -> int:
         required=True,
         help="compile_commands.json (may still list /home/... paths; it will be remapped)",
     )
-    p.add_argument(
+    root = p.add_mutually_exclusive_group(required=True)
+    root.add_argument(
         "--index-source-root",
-        required=True,
         type=str,
+        default=None,
         metavar="POSIX_DIR",
         help="Linux absolute root as in YAML FileURI / JSON paths, e.g. /home/dpi/build/.../repo",
+    )
+    root.add_argument(
+        "--infer-index-source-root-from-compile-commands",
+        action="store_true",
+        help="Infer Linux root from compile_commands directory/file paths (longest common prefix).",
     )
     p.add_argument(
         "--local-source-root",
@@ -110,7 +126,17 @@ def main() -> int:
         print(f"compile_commands.json not found: {cc}", file=sys.stderr)
         return 2
 
-    idx_root = str(args.index_source_root).strip().strip('"')
+    if args.infer_index_source_root_from_compile_commands:
+        from index_path_remap import infer_index_source_root_from_compile_commands_path
+
+        try:
+            idx_root = infer_index_source_root_from_compile_commands_path(str(cc))
+        except (OSError, ValueError, FileNotFoundError, json.JSONDecodeError) as exc:
+            print(f"Infer index root failed: {exc}", file=sys.stderr)
+            return 2
+        print(f"Inferred --index-source-root: {idx_root}", file=sys.stderr)
+    else:
+        idx_root = str(args.index_source_root).strip().strip('"')
     local_root = str(args.local_source_root).strip() if args.local_source_root else None
 
     neo_cmd = [

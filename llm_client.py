@@ -15,6 +15,7 @@ import asyncio
 import threading
 import atexit
 import math
+from pathlib import Path
 from typing import Any, List, Optional
 
 try:
@@ -361,6 +362,23 @@ def setup_llm_client(args, project_path: str) -> LlmClient:
 #
 # One SentenceTransformer per process (singleton) to avoid loading the model multiple times.
 
+
+def _repo_local_default_embedding_model() -> Optional[str]:
+    """
+    If ``embedding_models/sentence-transformers/all-MiniLM-L6-v2`` exists in the repo
+    (e.g. copied from a machine with Hugging Face access), use it when ``SENTENCE_TRANSFORMER_MODEL``
+    is unset so air-gapped installs never call the Hub.
+    """
+    try:
+        root = Path(__file__).resolve().parent
+        local = root / "embedding_models" / "sentence-transformers" / "all-MiniLM-L6-v2"
+        if (local / "config.json").is_file():
+            return str(local)
+    except OSError:
+        pass
+    return None
+
+
 class EmbeddingClient:
     """Base class for embedding clients."""
     is_local: bool = False
@@ -386,7 +404,14 @@ class SentenceTransformerClient(EmbeddingClient):
                 "Run: pip install sentence-transformers"
             ) from exc
 
-        model_name = os.environ.get("SENTENCE_TRANSFORMER_MODEL", "all-MiniLM-L6-v2")
+        model_name = os.environ.get("SENTENCE_TRANSFORMER_MODEL", "").strip()
+        if not model_name:
+            model_name = _repo_local_default_embedding_model() or "all-MiniLM-L6-v2"
+            if model_name != "all-MiniLM-L6-v2":
+                logger.info(
+                    "SENTENCE_TRANSFORMER_MODEL unset; loading bundled repo weights from %s",
+                    model_name,
+                )
         logger.info("Loading local SentenceTransformer model: %s", model_name)
         self.model = SentenceTransformer(model_name)
         self._dim: Optional[int] = None

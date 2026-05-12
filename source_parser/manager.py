@@ -7,9 +7,9 @@ import logging
 import gc
 import sys
 import git
+import shutil
 import subprocess
 import tempfile
-import shutil
 import clang.cindex
 from pathlib import Path
 from typing import Optional, List, Set, Tuple, Dict, Any
@@ -22,6 +22,69 @@ from .types import SourceSpan, MacroSpan, TypeAliasSpan, IncludeRelation
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
+
+def _libclang_windows_help_message() -> str:
+    return (
+        "python-clang could not load libclang.dll on Windows.\n"
+        "  1) Install LLVM for Windows (includes libclang.dll), e.g. "
+        "https://github.com/llvm/llvm-project/releases (Windows installer) or: winget install LLVM.LLVM\n"
+        "  2) Set either environment variable before running:\n"
+        "       LIBCLANG_LIBRARY_FILE = full path to libclang.dll "
+        r"(e.g. C:\Program Files\LLVM\bin\libclang.dll)" "\n"
+        "       LIBCLANG_PATH = directory containing libclang.dll (e.g. C:\\Program Files\\LLVM\\bin)\n"
+        "  Restart the terminal/IDE after installing LLVM so PATH is picked up."
+    )
+
+
+def _iter_windows_libclang_dll_candidates():
+    """Typical install locations for libclang.dll on Windows."""
+    seen = set()
+    w = shutil.which("libclang.dll")
+    if w:
+        p = Path(w).resolve()
+        if p not in seen:
+            seen.add(p)
+            yield p
+    llvm_home = os.environ.get("LLVM_INSTALL_DIR", "").strip()
+    if llvm_home:
+        p = (Path(llvm_home) / "bin" / "libclang.dll").resolve()
+        if p not in seen and p.parent.is_dir():
+            seen.add(p)
+            yield p
+    for key in ("ProgramFiles", "ProgramFiles(x86)"):
+        base = os.environ.get(key)
+        if not base:
+            continue
+        p = (Path(base) / "LLVM" / "bin" / "libclang.dll").resolve()
+        if p not in seen:
+            seen.add(p)
+            yield p
+    p = Path(r"C:\LLVM\bin\libclang.dll")
+    if p not in seen:
+        seen.add(p)
+        yield p
+
+
+def _try_configure_libclang_windows() -> bool:
+    """Point clang.cindex at the first usable libclang.dll. Returns True if configuration succeeded."""
+    if os.name != "nt":
+        return False
+    for dll in _iter_windows_libclang_dll_candidates():
+        if not dll.is_file():
+            continue
+        try:
+            clang.cindex.Config.set_library_file(str(dll))
+            logger.info("Using libclang.dll (auto-discovered): %s", dll)
+            return True
+        except Exception as exc:
+            logger.debug("libclang candidate %s: %s", dll, exc)
+    return False
+
+
+def _looks_like_missing_libclang_dll(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    return "libclang" in msg or "libclang.dll" in msg or "could not find module" in msg
 
 
 def _configure_libclang_from_env() -> None:
@@ -39,8 +102,11 @@ def _configure_libclang_from_env() -> None:
         try:
             clang.cindex.Config.set_library_path(lib_path)
             logger.info("Using libclang from LIBCLANG_PATH=%s", lib_path)
+            return
         except Exception as exc:
             logger.warning("Failed to set libclang library path '%s': %s", lib_path, exc)
+    if os.name == "nt" and not lib_file and not lib_path:
+        _try_configure_libclang_windows()
 
 
 _configure_libclang_from_env()
@@ -124,8 +190,19 @@ class CompilationManager:
                 db_dir = tmp
         else: raise FileNotFoundError(self.compile_commands_path)
 
-        # Build work items
-        db = clang.cindex.CompilationDatabase.fromDirectory(db_dir)
+        # Build work items (loads libclang; Windows often needs LIBCLANG_* or LLVM on PATH)
+        try:
+            db = clang.cindex.CompilationDatabase.fromDirectory(db_dir)
+        except Exception as exc:
+            if os.name == "nt" and _looks_like_missing_libclang_dll(exc):
+                if _try_configure_libclang_windows():
+                    try:
+                        db = clang.cindex.CompilationDatabase.fromDirectory(db_dir)
+                    except Exception as exc2:
+                        raise RuntimeError(_libclang_windows_help_message()) from exc2
+                else:
+                    raise RuntimeError(_libclang_windows_help_message()) from exc
+            raise
         source_exts = FileExtensions.ALL_C_CPP
         source_files = [f for f in files_to_parse if f.lower().endswith(source_exts)]
         

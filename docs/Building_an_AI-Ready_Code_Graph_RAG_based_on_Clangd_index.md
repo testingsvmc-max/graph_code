@@ -62,7 +62,7 @@ In this document, we give a deep dive into the design and architecture of the `c
 *   **My Goal**: To transform this raw, compiler-centric data into a connected knowledge graph that an AI can understand and reason about.
 
 #### Specification for Symbol
-```
+```text
 --- !Symbol
 ID:              BAA4D7A9E4AEF0DA
 Name:            free_java_object
@@ -99,7 +99,7 @@ IncludeHeaders:
 ...
 ```
 #### Specification for Refs
-```
+```text
 --- !Refs
 ID:              BAA4D7A9E4AEF0DA
 References:
@@ -140,7 +140,7 @@ References:
 
 ```
 #### Specification for Relations
-```
+```text
 struct Relation {
   SymbolID Subject;
   RelationKind Predicate; #  0: BaseOf,  1: OverriddenBy
@@ -289,7 +289,7 @@ All of these require parsing the source code itself. The project uses two techno
 *   **Our Solution**: The call graph builder adaptively checks which kinds to look for based on metadata it infers from the index file itself, making the pipeline resilient to this version change.
 
 #### Specification for RefKind
-```
+```text
 ------------- In clangd-indexer 21.x ----------------
 // clang-tools-extra/clangd/index/Ref.h
 enum class RefKind : uint8_t {

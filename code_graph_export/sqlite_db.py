@@ -6,7 +6,7 @@ import json
 import sqlite3
 import time
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Union
 
 
 _SCHEMA_SQL = """
@@ -62,7 +62,7 @@ def _norm_fp(v: Any) -> str:
     return str(v).replace("\\", "/")
 
 
-def write_graph_sqlite(graph: Dict[str, Any], db_path: str | Path) -> Path:
+def write_graph_sqlite(graph: Dict[str, Any], db_path: Union[str, Path]) -> Path:
     """
     Persist graph export dict into SQLite ``graph.db`` (same core tables as common graph-review tooling).
     Returns resolved DB path.

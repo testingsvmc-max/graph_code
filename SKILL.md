@@ -13,6 +13,8 @@ Authoritative steps and options live in **[README.md](README.md)** (Quick Start,
 | Query callers/callees / traversal (YAML) | **search-graph-export**: `standalone_tools/query_code_graph.py`, `standalone_tools/code_graph_tools.py` (optional MCP **8810**; optional `python -m code_graph_api … --port 8090`) |
 | Query structural graph in SQLite | **search-graph-db**: `standalone_tools/crg_db_query.py --db …` (optional `python -m code_graph_api.crg_db_main … --port 8091`) |
 | Semantic / vector search on chunks | **search-graph-semantic** + **embed-graph-vectordb** (build) |
+| Traverse from a function + Chroma (hybrid slice) | **graph-traverse-chroma**: `standalone_tools/chroma_graph_neighborhood.py` (positional start) |
+| Chroma NL → merged call-graph slice | **chroma-query-graph-traverse**: same script with `--chroma-seed-query` |
 | Unsure which interface | **query-graph-code** (router) |
 | Stable `*_tool` names (stats, query, traverse, impact, …) | Prefer CLI: `standalone_tools/code_graph_tools.py … catalog \| invoke`; optional HTTP/MCP per [README — Export graph tools](README.md#export-graph-tools--mcp-style-_tool-api-http--mcp--cli) |
 | Run **ADK** coding agent (YAML or Neo4j) | `.cline/skills/run-graph-agent`, [rag_adk_agent/README.md](rag_adk_agent/README.md) |
@@ -29,9 +31,11 @@ Under `.cline/skills/`:
 - **search-graph-export** — structural search on `code_graph.yaml` / `.json` (HTTP **8090**, CLI, MCP **8810**)
 - **search-graph-db** — structural search on SQLite `graph.db` (`crg_db_query.py`, HTTP **8091**)
 - **search-graph-semantic** — vector / semantic query (FAISS, Chroma, JSONL embeddings)
-- **query-graph-code** — router: pick export vs DB vs semantic search
+- **query-graph-code** — router: pick export vs DB vs semantic vs traverse+Chroma vs visualize
 - **run-graph-agent** — `adk run` / `adk web` or `run_export_graph_agent.py`; Neo4j+MCP vs YAML-only paths
 - **embed-graph-vectordb** — `export_graph_rag_chunks`, `faiss_code_graph_index` build; Chroma / FAISS / JSONL+embeddings
+- **graph-traverse-chroma** — structural `traverse` + Chroma `get` / filtered semantic query on neighborhood ids
+- **chroma-query-graph-traverse** — Chroma semantic seeds → merged `traverse` subgraph (`edges` + `nodes`)
 
 ## Neo4j-only agent notes (optional)
 

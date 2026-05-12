@@ -97,6 +97,16 @@ def main() -> int:
         logger.error("Index file does not exist: %s", args.index_file)
         return 1
 
+    if getattr(args, "infer_index_source_root_from_compile_commands", False):
+        try:
+            from index_path_remap import apply_infer_index_source_root_flag
+
+            apply_infer_index_source_root_flag(args, cc)
+        except ValueError as exc:
+            logger.error("%s", exc)
+            return 1
+        logger.info("Inferred --index-source-root: %s", args.index_source_root)
+
     graph = build_code_graph_dict(
         project_path=args.project_path,
         index_yaml_path=args.index_file,

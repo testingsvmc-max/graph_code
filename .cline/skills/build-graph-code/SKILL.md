@@ -1,6 +1,8 @@
 ---
 name: build-graph-code
-description: Build graph artifacts for the current project or a code directory — code_graph.yaml/json and optional SQLite graph.db (no Neo4j required). Use when the user asks to build the code graph or export graph core.
+description: >-
+  Build graph artifacts for the current project or a code directory — code_graph.yaml/json and optional
+  SQLite graph.db (no Neo4j required). Use when the user asks to build the code graph or export graph core.
 ---
 
 # build-graph-code
@@ -73,3 +75,5 @@ Optional quality check: `python eval/run_graph_eval.py --yaml <project_path>/.cl
 8. To **embed** the same YAML into a vector store (Chroma / FAISS / JSONL) and run **semantic query**, use **embed-graph-vectordb** (build) and **search-graph-semantic** (query).
 
 9. **Where to search:** YAML / JSON → **search-graph-export**; `graph.db` → **search-graph-db**; vectors → **search-graph-semantic**; unsure → **query-graph-code**.
+
+10. **Browser visualization (nodes/edges):** **visualize-graph-html** — `export_code_graph_html.py` (YAML/JSON) or `crg_db_to_vis_html.py` (`graph.db`) → single `.html` (vis-network).

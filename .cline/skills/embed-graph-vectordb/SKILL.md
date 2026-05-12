@@ -119,6 +119,8 @@ Use the **same** `SENTENCE_TRANSFORMER_MODEL` (and device) as when you ran **bui
 
 For **callers / callees / graph traverse** on symbols, use **search-graph-export** (`code_graph.yaml`) or **search-graph-db** (`graph.db`) — structural, not vector cosine.
 
+To **combine** traverse + Chroma (neighborhood ids → Chroma `get` / filtered `query`), use **graph-traverse-chroma** (`standalone_tools/chroma_graph_neighborhood.py`).
+
 ## Defaults and tuning
 
 - **Labels included** (unless `--include-label` is repeated): FUNCTION, METHOD, FILE, FOLDER, CLASS_STRUCTURE, DATA_STRUCTURE, MACRO, TYPE_ALIAS, NAMESPACE (see `export_graph_rag_chunks.py`).
@@ -137,4 +139,6 @@ For **callers / callees / graph traverse** on symbols, use **search-graph-export
 - **search-graph-semantic** — query FAISS / Chroma / JSONL vectors (this skill focuses on build + tuning).
 - **search-graph-export** / **search-graph-db** — structural graph search (YAML vs SQLite).
 - **query-graph-code** — router if unsure which search skill applies.
+- **graph-traverse-chroma** — structural neighborhood + Chroma payloads / optional semantic top‑k in that slice.
+- **chroma-query-graph-traverse** — Chroma NL seeds, then merged YAML traverse (`--chroma-seed-query`).
 - **run-graph-agent** — ADK agent on YAML (lexical tools unless you wire a vector retriever yourself).

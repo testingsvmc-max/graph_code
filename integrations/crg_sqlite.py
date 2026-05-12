@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 # ---------------------------------------------------------------------------
 # SQL views (idempotent) — run against an existing graph.db
@@ -92,7 +92,7 @@ def get_callees(conn: sqlite3.Connection, caller_qualified_name: str) -> List[Di
     return [_row_to_dict(r) for r in cur.fetchall()]
 
 
-def load_crg_db(db_path: str | Path) -> sqlite3.Connection:
+def load_crg_db(db_path: Union[str, Path]) -> sqlite3.Connection:
     p = Path(db_path).expanduser().resolve()
     if not p.is_file():
         raise FileNotFoundError(f"graph.db not found: {p}")
@@ -242,7 +242,7 @@ def crg_db_to_export_dict(
     return {"meta": meta, "nodes": nodes, "edges": edges}
 
 
-def apply_views_to_file(db_path: str | Path) -> None:
+def apply_views_to_file(db_path: Union[str, Path]) -> None:
     """CLI helper: open DB, create views, close."""
     conn = load_crg_db(db_path)
     try:
@@ -393,7 +393,7 @@ def call_graph_neighborhood(
             )
 
     uniq: List[Dict[str, str]] = []
-    seen_e: Set[tuple[str, str, str]] = set()
+    seen_e: Set[Tuple[str, str, str]] = set()
     for e in edges:
         k = (e["src"], e["dst"], e["type"])
         if k in seen_e:
