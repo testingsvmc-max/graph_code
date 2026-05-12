@@ -9,6 +9,10 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 
+# Local Python environment (recommended on Windows to avoid Store Python / path issues)
+.venv/
+_ci_test_venv/
+
 # Offline embedding weights (see embedding_models/README.md)
 embedding_models/sentence-transformers/
 embedding_models/huggingface_cache/
